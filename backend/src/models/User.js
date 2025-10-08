@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose'
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -10,9 +10,23 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Allows multiple docs with null googleId
+  },
+  verificationToken: { 
+    type: String, 
+  },
   password: {
     type: String,
     required: true,
+  },
+  resetToken: { 
+    type: String, 
+  },
+  resetTokenExpiration: {
+    type: Date
   },
     role: {
     type: String,
@@ -21,4 +35,4 @@ const userSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+export default mongoose.model('User', userSchema);

@@ -1,4 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const connectDB = async () => {
   try {
@@ -6,8 +9,8 @@ const connectDB = async () => {
     console.log(`MongoDB connected: ${conn.connection.host}`);
   } catch (error) {
     console.error("MongoDB connection error:", error.message);
-    process.exit(1); // Exit process if DB connection fails
+    process.exit(1);
   }
 };
 
-module.exports = connectDB;
+export default connectDB;
