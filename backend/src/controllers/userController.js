@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import sendEmail from '../utils/emailService.js';
 
-//Register a new user
+//Register
 
 export const register = async (req, res) => {
     try {
