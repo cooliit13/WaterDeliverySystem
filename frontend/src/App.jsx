@@ -4,11 +4,10 @@
  * Simplified version without authentication or Redux.
  * Directly renders pages and layouts for frontend development.
  */
-
+import { Toaster } from "react-hot-toast";
 import { Route, Routes, Navigate } from "react-router-dom";
 
 // 🧩 Layout Components
-import AuthLayout from "./components/auth/layout";
 import AdminLayout from "./components/admin-view/layout";
 import ShoppingLayout from "./components/shopping-view/layout";
 
@@ -38,15 +37,15 @@ import UnauthPage from "./pages/unauth-page";
 function App() {
   return (
     <div className="flex flex-col overflow-hidden bg-white">
+      <Toaster position="top-right" reverseOrder={false} />
+
       <Routes>
         {/* 🏠 Default Redirect */}
         <Route path="/" element={<Navigate to="/auth/login" />} />
 
-        {/* 🧾 Authentication Routes */}
-        <Route path="/auth" element={<AuthLayout />}>
-          <Route path="login" element={<AuthLogin />} />
-          <Route path="register" element={<AuthRegister />} />
-        </Route>
+        {/* 🧾 Authentication Routes (No Layout) */}
+        <Route path="/auth/login" element={<AuthLogin />} />
+        <Route path="/auth/register" element={<AuthRegister />} />
 
         {/* 🛠️ Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>

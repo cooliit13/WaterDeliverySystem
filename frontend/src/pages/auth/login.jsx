@@ -1,84 +1,142 @@
-import CommonForm from "@/components/common/form";
-import { useToast } from "@/components/ui/use-toast";
-import { loginFormControls } from "@/config";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { motion } from "framer-motion";
 
-const initialState = {
-  email: "",
-  password: "",
-};
-
-function AuthLogin() {
-  const [formData, setFormData] = useState(initialState);
-  const { toast } = useToast();
+export default function AuthLogin() {
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
 
-  function onSubmit(event) {
-    event.preventDefault();
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-    const { email, password } = formData;
+  const handleLogin = (e) => {
+    e.preventDefault();
 
-    if (!email || !password) {
-      toast({
-        title: "Please fill in all fields",
-        variant: "destructive",
-      });
+    if (!formData.email || !formData.password) {
+      toast.error("Please fill in both email and password!");
       return;
     }
 
-    // ✅ Frontend-only login simulation
-    if (email === "reys10801@gmail.com") {
-      toast({
-        title: "Welcome Admin!",
-        description: "Redirecting to Admin Dashboard...",
-      });
-      navigate("/admin/dashboard"); // 🔁 Redirect to Admin
-    } 
-    else if (email === "2301113504@Student.buksu.edu.ph") {
-      toast({
-        title: "Welcome Student!",
-        description: "Redirecting to Shopping Home...",
-      });
-      navigate("/shop/home"); // 🔁 Redirect to Shop
-    } 
-    else {
-      toast({
-        title: "Login successful!",
-        description: `Welcome back, ${email}! Redirecting to Shop...`,
-      });
-      navigate("/shop/home"); // Default redirect
+    // 🧩 Check for admin account
+    if (
+      formData.email.toLowerCase() === "2301113504@student.buksu.edu.ph" &&
+      formData.password === "admin123"
+    ) {
+      toast.success("Welcome Admin!");
+      setTimeout(() => navigate("/admin/dashboard"), 1500);
+      return;
     }
 
-    console.log("Login form submitted:", formData);
-  }
+    // 🧩 Check for regular user (temporary mock)
+    if (formData.email === "test@example.com" && formData.password === "123456") {
+      toast.success("Login successful!");
+      setTimeout(() => navigate("/shop/home"), 1500);
+      return;
+    }
+
+    toast.error("Invalid email or password!");
+  };
+
+  const handleGoogleLogin = () => {
+    toast("Google Sign-In not yet implemented");
+  };
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Sign in to your account
-        </h1>
-        <p className="mt-2">
-          Don't have an account?
-          <Link
-            className="font-medium ml-2 text-primary hover:underline"
-            to="/auth/register"
-          >
-            Register
-          </Link>
-        </p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <Card className="shadow-xl rounded-2xl border border-blue-200">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-semibold text-blue-700">
+              Welcome Back 👋
+            </CardTitle>
+            <p className="text-gray-500 text-sm mt-2">
+              Login to your water delivery account
+            </p>
+          </CardHeader>
 
-      <CommonForm
-        formControls={loginFormControls}
-        buttonText="Sign In"
-        formData={formData}
-        setFormData={setFormData}
-        onSubmit={onSubmit}
-      />
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              {/* Email */}
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+
+              {/* Login Button */}
+              <Button type="submit" className="w-full mt-2 bg-blue-600 hover:bg-blue-700">
+                Login
+              </Button>
+
+              {/* OR Separator */}
+              <div className="flex items-center my-2">
+                <hr className="flex-1 border-gray-300" />
+                <span className="mx-2 text-gray-400 text-sm">OR</span>
+                <hr className="flex-1 border-gray-300" />
+              </div>
+
+              {/* Google Login */}
+              <Button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
+              >
+                <img
+                  src="https://www.svgrepo.com/show/475656/google-color.svg"
+                  alt="Google"
+                  className="w-5 h-5 mr-2"
+                />
+                Login with Google
+              </Button>
+
+              {/* Register Link */}
+              <p className="text-center text-sm text-gray-600 mt-3">
+                Don’t have an account?{" "}
+                <span
+                  onClick={() => navigate("/auth/register")}
+                  className="text-blue-600 hover:underline cursor-pointer"
+                >
+                  Register here
+                </span>
+              </p>
+            </form>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
-
-export default AuthLogin;

@@ -74,7 +74,7 @@ function ProductImageUpload({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         className={`${
-          isEditMode ? "opacity-60" : ""
+          isEditMode ? "opacity-1" : ""
         } border-2 border-dashed rounded-lg p-4`}
       >
         <Input
