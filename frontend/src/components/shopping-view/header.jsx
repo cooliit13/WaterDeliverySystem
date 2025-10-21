@@ -23,6 +23,8 @@ import UserCartWrapper from "./cart-wrapper";
 import { useEffect, useState } from "react";
 import { fetchCartItems } from "@/store/shop/cart-slice";
 import { Label } from "../ui/label";
+import { toast } from "react-hot-toast";
+
 
 function MenuItems() {
   const navigate = useNavigate();
@@ -71,19 +73,59 @@ function HeaderRightContent() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  function handleLogout() {
-    dispatch(logoutUser());
-  }
+  const handleLogout = () => {
+    toast(
+      (t) => (
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm font-medium">
+            Are you sure you want to logout?
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                toast.dismiss(t.id);
+                try {
+                  await dispatch(logoutUser()).unwrap();
+                  localStorage.removeItem("token");
+                  toast.success("You have been logged out.");
+                  navigate("/auth/login");
+                } catch (error) {
+                  console.error("Logout failed:", error);
+                  toast.error("Failed to logout. Try again.");
+                }
+              }}
+            >
+              Yes
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => toast.dismiss(t.id)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ),
+      {
+        duration: 5000,
+        position: "top-center",
+      }
+    );
+  };
 
   useEffect(() => {
-    dispatch(fetchCartItems(user?.id));
-  }, [dispatch]);
-
-  console.log(cartItems, "sangam");
+    if (user?.id) {
+      dispatch(fetchCartItems(user.id));
+    }
+  }, [dispatch, user?.id]);
 
   return (
     <div className="flex lg:items-center lg:flex-row flex-col gap-4">
-      <Sheet open={openCartSheet} onOpenChange={() => setOpenCartSheet(false)}>
+      {/* 🛒 Cart Button */}
+      <Sheet open={openCartSheet} onOpenChange={setOpenCartSheet}>
         <Button
           onClick={() => setOpenCartSheet(true)}
           variant="outline"
@@ -98,30 +140,44 @@ function HeaderRightContent() {
         </Button>
         <UserCartWrapper
           setOpenCartSheet={setOpenCartSheet}
-          cartItems={
-            cartItems && cartItems.items && cartItems.items.length > 0
-              ? cartItems.items
-              : []
-          }
+          cartItems={cartItems?.items?.length > 0 ? cartItems.items : []}
         />
       </Sheet>
 
+      {/* 👤 Profile Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Avatar className="bg-black">
-            <AvatarFallback className="bg-black text-white font-extrabold">
-              {user?.userName[0].toUpperCase()}
-            </AvatarFallback>
+          <Avatar className="bg-black cursor-pointer">
+            {user?.profileImage ? (
+              <img
+                src={user.profileImage}
+                alt="Profile"
+                className="w-10 h-10 rounded-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = "none";
+                }}
+              />
+            ) : (
+              <AvatarFallback className="bg-black text-white font-extrabold">
+                {user?.fullName ? user.fullName[0].toUpperCase() : "?"}
+              </AvatarFallback>
+            )}
           </Avatar>
         </DropdownMenuTrigger>
+
         <DropdownMenuContent side="right" className="w-56">
-          <DropdownMenuLabel>Logged in as {user?.userName}</DropdownMenuLabel>
+          <DropdownMenuLabel>
+            Logged in as {user?.fullName || "Guest"}
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
+
           <DropdownMenuItem onClick={() => navigate("/shop/account")}>
             <UserCog className="mr-2 h-4 w-4" />
             Account
           </DropdownMenuItem>
+
           <DropdownMenuSeparator />
+
           <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
             Logout
@@ -131,6 +187,8 @@ function HeaderRightContent() {
     </div>
   );
 }
+
+
 
 function ShoppingHeader() {
   const { isAuthenticated } = useSelector((state) => state.auth);

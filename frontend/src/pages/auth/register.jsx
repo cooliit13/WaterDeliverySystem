@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import axios from "axios";
 
 export default function AuthRegister() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export default function AuthRegister() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -32,13 +33,30 @@ export default function AuthRegister() {
       return;
     }
 
-    if (!formData.email || !formData.password || !formData.fullName) {
-      toast.error("Please fill in all required fields!");
-      return;
-    }
+    try {
+      // 🧩 Send only the required data for backend
+      const response = await axios.post("http://localhost:5000/api/auth/register", {
+        fullName: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+      });
 
-    toast.success("Registration successful!");
-    setTimeout(() => navigate("/auth/login"), 2000);
+      if (response.status === 201) {
+        toast.success("Registration successful!");
+        setTimeout(() => navigate("/auth/login"), 1500);
+      }
+    } catch (error) {
+      if (error.response) {
+        // The backend sent an error response
+        toast.error(error.response.data.message || "Registration failed!");
+      } else if (error.request) {
+        // No response received (CORS or server down)
+        toast.error("No response from server. Check your backend connection.");
+      } else {
+        // Error before sending request
+        toast.error("Something went wrong. Please try again.");
+      }
+    }
   };
 
   const handleGoogleRegister = () => {

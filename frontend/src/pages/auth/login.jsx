@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import ReCAPTCHA from "react-google-recaptcha"; // ✅ Added import
 
 export default function AuthLogin() {
   const navigate = useNavigate();
@@ -13,12 +14,13 @@ export default function AuthLogin() {
     email: "",
     password: "",
   });
+  const [captchaToken, setCaptchaToken] = useState(null); // ✅ reCAPTCHA state
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     if (!formData.email || !formData.password) {
@@ -26,24 +28,30 @@ export default function AuthLogin() {
       return;
     }
 
-    // 🧩 Check for admin account
-    if (
-      formData.email.toLowerCase() === "2301113504@student.buksu.edu.ph" &&
-      formData.password === "admin123"
-    ) {
-      toast.success("Welcome Admin!");
-      setTimeout(() => navigate("/admin/dashboard"), 1500);
+    if (!captchaToken) {
+      toast.error("Please complete the reCAPTCHA!");
       return;
     }
 
-    // 🧩 Check for regular user (temporary mock)
-    if (formData.email === "test@example.com" && formData.password === "123456") {
+    try {
+      const response = await fetch("http://localhost:5000/api/users/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, captchaToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed");
+      }
+
       toast.success("Login successful!");
+      localStorage.setItem("token", data.token);
       setTimeout(() => navigate("/shop/home"), 1500);
-      return;
+    } catch (error) {
+      toast.error(error.message || "Something went wrong");
     }
-
-    toast.error("Invalid email or password!");
   };
 
   const handleGoogleLogin = () => {
@@ -97,10 +105,28 @@ export default function AuthLogin() {
                 />
               </div>
 
+              {/* ✅ reCAPTCHA v2 Checkbox */}
+              <div className="flex justify-center mt-2">
+                <ReCAPTCHA
+                  sitekey="6LdE5fErAAAAAMPMecxawBsdaPb7baXSM2OkJDez"
+                  onChange={(token) => setCaptchaToken(token)}
+                />
+              </div>
+
               {/* Login Button */}
-              <Button type="submit" className="w-full mt-2 bg-blue-600 hover:bg-blue-700">
+              <Button
+                type="submit"
+                className="w-full mt-2 bg-blue-600 hover:bg-blue-700"
+              >
                 Login
               </Button>
+              <p
+  className="text-right text-sm text-blue-600 hover:underline cursor-pointer mt-1"
+  onClick={() => navigate("/auth/forgot-password")}
+>
+  Forgot Password?
+</p>
+
 
               {/* OR Separator */}
               <div className="flex items-center my-2">

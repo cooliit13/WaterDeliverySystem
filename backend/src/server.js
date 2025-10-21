@@ -1,22 +1,35 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import connectDB from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
-import cors from 'cors';
 import customerRoutes from './routes/customerRoutes.js';
-import adminRoutes from "./routes/adminRoutes.js";
+import adminRoutes from './routes/adminRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 dotenv.config();
 connectDB();
+
 const app = express();
 
-app.use("/api/admin", adminRoutes);
-app.use('/api/customers', customerRoutes);
+// ✅ Middleware order matters
+app.use(cors({
+  origin: "http://localhost:5173", // Your React app's port
+  credentials: true,
+}));
 app.use(express.json());
-app.use(cors());
-app.use('/api/users', userRoutes);
-app.use(express.json());
-//db connection
 
+// ✅ API Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/users", userRoutes);
+
+// ✅ Test endpoint to verify backend connectivity
+app.get("/api/test", (req, res) => {
+  res.json({ message: "✅ Backend is running and reachable from frontend!" });
+});
+
+// ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

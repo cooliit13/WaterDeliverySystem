@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
 const userSchema = new mongoose.Schema({
-  name: {
+  fullName: {
     type: String,
     required: true,
   },
@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema({
   verificationToken: { 
     type: String, 
   },
+  isVerified: { 
+    type: Boolean, 
+    default: false 
+  },
   password: {
     type: String,
     required: true,
@@ -28,11 +32,18 @@ const userSchema = new mongoose.Schema({
   resetTokenExpiration: {
     type: Date
   },
-    role: {
+  role: {
     type: String,
     enum: ['customer', 'admin'],
     default: 'customer',
   },
+
+  // ✅ NEW: Profile image field
+  profileImage: {
+    type: String,
+    default: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+  },
+
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);
