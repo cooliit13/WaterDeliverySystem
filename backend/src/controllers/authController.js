@@ -4,10 +4,11 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import { sendVerificationEmail } from "../utils/emailService.js";
+import { OAuth2Client } from "google-auth-library";
 
-// ==============================
+
 // REGISTER USER (with verification)
-// ==============================
+
 export const registerUser = async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
@@ -47,16 +48,70 @@ export const registerUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// ==============================
+// controllers/authController.js
+
+
+
+export const googleLogin = async (req, res) => {
+  try {
+    const { email, fullName } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Missing email from Google login" });
+    }
+
+    // Check if the user already exists
+    let user = await User.findOne({ email });
+
+    // If not, create one automatically
+    if (!user) {
+      user = new User({
+        fullName,
+        email,
+        password: null, // no password for Google users
+        isVerified: true, // mark as verified since Google verified their email
+      });
+      await user.save();
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET || "yourSecretKey",
+      { expiresIn: "1h" }
+    );
+
+    // Return token and user info
+    res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      token,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    res.status(500).json({ message: "Server error during Google login" });
+  }
+};
+
+
+
+
 // LOGIN USER (with reCAPTCHA)
-// ==============================
+
 export const loginUser = async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
 
+    // 🔹 Verify reCAPTCHA
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-
     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${captchaToken}`;
     const captchaResponse = await fetch(verifyUrl, { method: "POST" });
     const captchaData = await captchaResponse.json();
@@ -65,19 +120,26 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ message: "reCAPTCHA verification failed" });
     }
 
-    const user = await User.findOne({ email });
+    // 🔹 Find user
+    let user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // 🔹 Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid)
       return res.status(401).json({ message: "Invalid credentials" });
 
+    // 🔹 Re-fetch the user from MongoDB to ensure latest role
+    user = await User.findById(user._id);
+
+    // 🔹 Create JWT token (with role)
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET || "yourSecretKey",
       { expiresIn: "1h" }
     );
 
+    // 🔹 Send the full, current user object
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -85,7 +147,8 @@ export const loginUser = async (req, res) => {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        profileImage: user.profileImage,
+        role: user.role,
+        profileImage: user.profileImage || null,
       },
       token,
     });
@@ -95,9 +158,10 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// ==============================
+
+
+
 // FORGOT PASSWORD
-// ==============================
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -136,9 +200,8 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// ==============================
 // RESET PASSWORD
-// ==============================
+
 export const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
@@ -164,9 +227,6 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ==============================
-// VERIFY EMAIL LINK
-// ==============================
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;

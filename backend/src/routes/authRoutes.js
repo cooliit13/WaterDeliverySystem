@@ -4,6 +4,10 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User.js";
 import { sendVerificationEmail } from "../utils/emailService.js"; // your email sender
+import passport from "passport";
+import "../config/passport.js";
+import { loginUser, registerUser, googleLogin } from "../controllers/authController.js";
+
 
 const router = express.Router();
 
@@ -11,6 +15,8 @@ const router = express.Router();
  * @route   POST /api/auth/register
  * @desc    Register user and send verification email
  */
+
+//  Google Login Route
 
 
 
@@ -94,7 +100,7 @@ router.post("/login", async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    // ✅ Block login if email not verified
+    //  Block login if email not verified
     if (!user.isVerified) {
       return res
         .status(403)
@@ -111,7 +117,7 @@ router.post("/login", async (req, res) => {
   { expiresIn: "1h" }
 );
 
-// ✅ Updated login response
+//  Updated login response
 res.status(200).json({
   success: true,
   message: "Login successful",
@@ -130,7 +136,7 @@ res.status(200).json({
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 });
-// ✅ TEST EMAIL ROUTE — for debugging email sending
+//  TEST EMAIL ROUTE — for debugging email sending
 router.get("/test-email", async (req, res) => {
   try {
     const testRecipient = "your_actual_email@gmail.com";
@@ -165,6 +171,8 @@ router.post("/forgot-password", forgotPassword);
 
 // Reset Password - verify token and update password
 router.post("/reset-password/:token", resetPassword);
+router.post("/google-login", googleLogin);
+
 
 
 
