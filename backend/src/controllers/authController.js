@@ -1,11 +1,13 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
-import { sendVerificationEmail } from "../utils/emailService.js"; // ✅ import email utility
+import { sendVerificationEmail } from "../utils/emailService.js";
 
-
-// REGISTER USER WITH EMAIL VERIFICATION
+// ==============================
+// REGISTER USER (with verification)
+// ==============================
 export const registerUser = async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
@@ -37,24 +39,25 @@ export const registerUser = async (req, res) => {
         id: newUser._id,
         fullName: newUser.fullName,
         email: newUser.email,
-        profileImage: newUser.profileImage, // 👈 Include this
-      }
+        profileImage: newUser.profileImage,
+      },
     });
   } catch (error) {
     console.error("Registration Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-import fetch from "node-fetch"; // install via npm install node-fetch
 
+// ==============================
+// LOGIN USER (with reCAPTCHA)
+// ==============================
 export const loginUser = async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
 
-    // ✅ Verify reCAPTCHA
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${captchaToken}`;
 
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${captchaToken}`;
     const captchaResponse = await fetch(verifyUrl, { method: "POST" });
     const captchaData = await captchaResponse.json();
 
@@ -62,7 +65,6 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ message: "reCAPTCHA verification failed" });
     }
 
-    // ✅ Find user and validate password (existing logic)
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -70,8 +72,12 @@ export const loginUser = async (req, res) => {
     if (!isPasswordValid)
       return res.status(401).json({ message: "Invalid credentials" });
 
-    // ✅ If passed, proceed with login
-    const token = "GENERATE_YOUR_JWT_HERE"; // replace with your JWT logic
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET || "yourSecretKey",
+      { expiresIn: "1h" }
+    );
+
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -89,6 +95,9 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// ==============================
+// FORGOT PASSWORD
+// ==============================
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -101,9 +110,8 @@ export const forgotPassword = async (req, res) => {
     user.resetTokenExpiration = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    const resetLink = `http://localhost:3000/auth/reset-password/${resetToken}`;
+    const resetLink = `http://localhost:5173/auth/reset-password/${resetToken}`;
 
-    // Send email
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -123,12 +131,14 @@ export const forgotPassword = async (req, res) => {
 
     res.status(200).json({ message: "Password reset email sent" });
   } catch (error) {
-    console.error(error);
+    console.error("Forgot Password Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// 2️⃣ Reset password
+// ==============================
+// RESET PASSWORD
+// ==============================
 export const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
@@ -138,7 +148,9 @@ export const resetPassword = async (req, res) => {
       resetToken: token,
       resetTokenExpiration: { $gt: Date.now() },
     });
-    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+    if (!user)
+      return res.status(400).json({ message: "Invalid or expired token" });
 
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetToken = undefined;
@@ -147,14 +159,14 @@ export const resetPassword = async (req, res) => {
 
     res.status(200).json({ message: "Password successfully reset" });
   } catch (error) {
-    console.error(error);
+    console.error("Reset Password Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-// VERIFY EMAIL LINK HANDLER
+// ==============================
+// VERIFY EMAIL LINK
+// ==============================
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -168,12 +180,9 @@ export const verifyEmail = async (req, res) => {
     user.verificationToken = undefined;
     await user.save();
 
-    res.send(
-      "<h2>Email verified successfully! You can now close this tab and log in.</h2>"
-    );
+    res.send("<h2>Email verified successfully! You can now log in.</h2>");
   } catch (error) {
     console.error("Email verification error:", error);
     res.status(500).send("<h2>Server error verifying email.</h2>");
   }
-  
 };

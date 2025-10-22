@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User.js";
-import { sendVerificationEmail } from "../utils/emailService.js"; // ✅ your email sender
+import { sendVerificationEmail } from "../utils/emailService.js"; // your email sender
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ const router = express.Router();
  * @route   POST /api/auth/register
  * @desc    Register user and send verification email
  */
+
 
 
 router.post("/register", async (req, res) => {
@@ -119,7 +120,7 @@ res.status(200).json({
     fullName: user.fullName,
     email: user.email,
     role: user.role,
-    profileImage: user.profileImage, // 👈 Add this
+    profileImage: user.profileImage,
   },
   token,
 });
@@ -132,7 +133,7 @@ res.status(200).json({
 // ✅ TEST EMAIL ROUTE — for debugging email sending
 router.get("/test-email", async (req, res) => {
   try {
-    const testRecipient = "your_actual_email@gmail.com"; // 👈 put your Gmail here temporarily
+    const testRecipient = "your_actual_email@gmail.com";
     const testToken = "test-token";
 
     await sendVerificationEmail(testRecipient, testToken);
@@ -157,6 +158,14 @@ router.post("/logout", (req, res) => {
   }
   
 });
+import { forgotPassword, resetPassword } from "../controllers/authController.js";
+
+// Forgot Password - send reset link
+router.post("/forgot-password", forgotPassword);
+
+// Reset Password - verify token and update password
+router.post("/reset-password/:token", resetPassword);
+
 
 
 

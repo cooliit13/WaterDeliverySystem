@@ -14,6 +14,8 @@ import ShoppingLayout from "./components/shopping-view/layout";
 // 📄 Auth Pages
 import AuthLogin from "./pages/auth/login";
 import AuthRegister from "./pages/auth/register";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword"; // ✅ Added this import
 
 // 📄 Admin Pages
 import AdminDashboard from "./pages/admin-view/dashboard";
@@ -43,9 +45,11 @@ function App() {
         {/* 🏠 Default Redirect */}
         <Route path="/" element={<Navigate to="/auth/login" />} />
 
-        {/* 🧾 Authentication Routes (No Layout) */}
+        {/* 🧾 Authentication Routes */}
         <Route path="/auth/login" element={<AuthLogin />} />
         <Route path="/auth/register" element={<AuthRegister />} />
+        <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+        <Route path="/auth/reset-password/:token" element={<ResetPassword />} />
 
         {/* 🛠️ Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
