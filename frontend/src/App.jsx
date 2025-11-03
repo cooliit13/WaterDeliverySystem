@@ -31,6 +31,9 @@ import ShoppingAccount from "./pages/shopping-view/account";
 import PaypalReturnPage from "./pages/shopping-view/paypal-return";
 import PaymentSuccessPage from "./pages/shopping-view/payment-success";
 import SearchProducts from "./pages/shopping-view/search";
+import VerifyEmail from "./pages/auth/VerifyEmail";
+
+
 
 // 🚫 Other Pages
 import NotFound from "./pages/not-found";
@@ -50,6 +53,9 @@ function App() {
         <Route path="/auth/register" element={<AuthRegister />} />
         <Route path="/auth/forgot-password" element={<ForgotPassword />} />
         <Route path="/auth/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/auth/verify/:token" element={<VerifyEmail />} />
+        
+
 
         {/* 🛠️ Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>

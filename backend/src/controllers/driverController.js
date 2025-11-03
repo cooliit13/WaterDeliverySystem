@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
-import Order from "../models/order.js";
+
 
 //  Register Driver
 export const registerDriver = async (req, res) => {

@@ -246,3 +246,5 @@ export const verifyEmail = async (req, res) => {
     res.status(500).send("<h2>Server error verifying email.</h2>");
   }
 };
+
+

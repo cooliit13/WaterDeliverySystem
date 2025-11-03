@@ -7,6 +7,10 @@ import { sendVerificationEmail } from "../utils/emailService.js"; // your email 
 import passport from "passport";
 import "../config/passport.js";
 import { loginUser, registerUser, googleLogin } from "../controllers/authController.js";
+import { verifyEmail } from "../controllers/authController.js";
+
+
+
 
 
 const router = express.Router();
