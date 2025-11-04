@@ -59,10 +59,6 @@ export default function AuthRegister() {
     }
   };
 
-  const handleGoogleRegister = () => {
-    toast("Google Sign-In not yet implemented");
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-100 to-white">
       <motion.div
@@ -207,19 +203,6 @@ export default function AuthRegister() {
                 <hr className="flex-1 border-gray-300" />
               </div>
 
-              {/* Google Sign-In */}
-              <Button
-                type="button"
-                onClick={handleGoogleRegister}
-                className="w-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
-              >
-                <img
-                  src="https://www.svgrepo.com/show/475656/google-color.svg"
-                  alt="Google"
-                  className="w-5 h-5 mr-2"
-                />
-                Sign up with Google
-              </Button>
 
               {/* Redirect to Login */}
               <p className="text-center text-sm text-gray-600 mt-3">

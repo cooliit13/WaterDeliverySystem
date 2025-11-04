@@ -53,11 +53,14 @@ export default function AuthLogin() {
 
       // ✅ Smart redirect based on role
       const role = data.user.role?.toLowerCase();
-      if (role === "admin") {
-        navigate("/admin/dashboard");
-      } else {
-        navigate("/shop/home");
-      }
+
+if (role === "admin") {
+  navigate("/admin/dashboard");
+} else if (role === "driver") {
+  navigate("/driver/dashboard");
+} else {
+  navigate("/shop/home"); // customer
+}
 
     } catch (error) {
       toast.error(error.message || "Something went wrong");
@@ -65,43 +68,39 @@ export default function AuthLogin() {
   };
 
   // ✅ Google Login
-  const handleGoogleSuccess = async (credentialResponse) => {
-    try {
-      const decoded = jwtDecode(credentialResponse.credential);
-      console.log("Google user:", decoded);
+  // ✅ Google Login (fixed)
+const handleGoogleSuccess = async (credentialResponse) => {
+  try {
+    const response = await fetch("http://localhost:5000/api/auth/google-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential: credentialResponse.credential }),
+    });
 
-      const res = await fetch("http://localhost:5000/api/auth/google-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: decoded.email,
-          fullName: decoded.name,
-        }),
-      });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Google login failed");
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Google login failed");
+    // ✅ Save token + role
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("userRole", data.user.role);
 
-      // ✅ Save token + role
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("userRole", data.user.role);
+    toast.success("Google login successful!");
 
-      toast.success("Google login successful!");
-
-      // ✅ Redirect based on role
-      const role = data.user.role?.toLowerCase();
-      if (role === "admin") {
-        navigate("/admin/dashboard");
-      } else {
-        navigate("/shop/home");
-      }
-
-    } catch (err) {
-      console.error("Google login error:", err);
-      toast.error("Google login failed");
+    // ✅ Redirect based on role
+    const role = data.user.role?.toLowerCase();
+    if (role === "admin") {
+      navigate("/admin/dashboard");
+    } else {
+      navigate("/shop/home");
     }
-  };
+
+  } catch (err) {
+    console.error("Google login error:", err);
+    toast.error("Google login failed");
+  }
+};
+
 
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>

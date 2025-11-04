@@ -23,6 +23,7 @@ import AdminProducts from "./pages/admin-view/products";
 import AdminOrders from "./pages/admin-view/orders";
 import AdminFeatures from "./pages/admin-view/features";
 
+
 // 🛍️ Shopping Pages
 import ShoppingHome from "./pages/shopping-view/home";
 import ShoppingListing from "./pages/shopping-view/listing";
@@ -33,6 +34,9 @@ import PaymentSuccessPage from "./pages/shopping-view/payment-success";
 import SearchProducts from "./pages/shopping-view/search";
 import VerifyEmail from "./pages/auth/VerifyEmail";
 
+// Driver Page
+import DriverDashboard from "./pages/driver-view/dashboard";
+import DriverLayout from "./components/driver-view/layout";
 
 
 // 🚫 Other Pages
@@ -54,7 +58,8 @@ function App() {
         <Route path="/auth/forgot-password" element={<ForgotPassword />} />
         <Route path="/auth/reset-password/:token" element={<ResetPassword />} />
         <Route path="/auth/verify/:token" element={<VerifyEmail />} />
-        
+
+
 
 
         {/* 🛠️ Admin Routes */}
@@ -64,6 +69,10 @@ function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="features" element={<AdminFeatures />} />
         </Route>
+ {/* Driver */}
+        <Route path="/driver" element={<DriverLayout />}>
+  <Route path="dashboard" element={<DriverDashboard />} />
+</Route>
 
         {/* 🛒 Shopping Routes */}
         <Route path="/shop" element={<ShoppingLayout />}>

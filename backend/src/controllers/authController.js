@@ -56,34 +56,47 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const googleLogin = async (req, res) => {
   try {
-    const { email, fullName } = req.body;
+    const { credential } = req.body; // <-- This comes from your frontend Google button
 
-    if (!email) {
-      return res.status(400).json({ message: "Missing email from Google login" });
+    if (!credential) {
+      return res.status(400).json({ message: "Missing Google credential" });
     }
 
-    // Check if the user already exists
+    // Verify the Google token
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID, // must match the frontend client_id
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: "Google login failed — no email provided." });
+    }
+
+    // Check if the user exists
     let user = await User.findOne({ email });
 
-    // If not, create one automatically
+    // If not, create a new one
     if (!user) {
       user = new User({
-        fullName,
+        fullName: name,
         email,
-        password: null, // no password for Google users
-        isVerified: true, // mark as verified since Google verified their email
+        password: null,
+        isVerified: true,
+        profileImage: picture, // optional
       });
       await user.save();
     }
 
-    // Create JWT token
+    // Create JWT
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET || "yourSecretKey",
       { expiresIn: "1h" }
     );
 
-    // Return token and user info
     res.status(200).json({
       success: true,
       message: "Google login successful",
@@ -93,11 +106,12 @@ export const googleLogin = async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
       },
     });
   } catch (error) {
     console.error("Google Login Error:", error);
-    res.status(500).json({ message: "Server error during Google login" });
+    res.status(500).json({ message: "Server error during Google login", error: error.message });
   }
 };
 
