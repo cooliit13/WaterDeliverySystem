@@ -54,39 +54,14 @@ export const addProductFormElements = [
     placeholder: "Enter product description",
   },
   {
-    label: "Category",
-    name: "category",
-    componentType: "select",
-    options: [
-      { id: "filters", label: "Water Filters" },
-      { id: "pumps&Tanks", label: "Pumps & Tanks" },
-      { id: "dispensers", label: "Dispensers" },
-      { id: "accessories&Tools", label: "Accessories & Tools" },
-      { id: "WaterDispensers", label: "Water Dispensers" },
-    ],
-  },
-  {
     label: "Price",
     name: "price",
     componentType: "input",
     type: "number",
     placeholder: "Enter product price",
-  },
-  {
-    label: "Sale Price",
-    name: "salePrice",
-    componentType: "input",
-    type: "number",
-    placeholder: "Enter sale price (optional)",
-  },
-  {
-    label: "Total Stock",
-    name: "totalStock",
-    componentType: "input",
-    type: "number",
-    placeholder: "Enter total stock",
-  },
+  }
 ];
+
 
 export const shoppingViewHeaderMenuItems = [
   {

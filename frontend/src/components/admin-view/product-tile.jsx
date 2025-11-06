@@ -9,32 +9,40 @@ function AdminProductTile({
   handleDelete,
 }) {
   return (
-    <Card className="w-full max-w-sm mx-auto">
+    <Card
+      className="
+        w-full max-w-sm mx-auto rounded-2xl 
+        bg-white/40 backdrop-blur-md border border-white/30
+        shadow-md hover:shadow-xl 
+        transition-all duration-300 hover:scale-[1.02]
+      "
+    >
       <div>
         <div className="relative">
           <img
             src={product?.image}
             alt={product?.title}
-            className="w-full h-[300px] object-cover rounded-t-lg"
+            className="w-full h-[260px] object-cover rounded-t-2xl"
           />
         </div>
-        <CardContent>
-          <h2 className="text-xl font-bold mb-2 mt-2">{product?.title}</h2>
-          <div className="flex justify-between items-center mb-2">
-            <span
-              className={`${
-                product?.salePrice > 0 ? "line-through" : ""
-              } text-lg font-semibold text-primary`}
-            >
-              ${product?.price}
-            </span>
-            {product?.salePrice > 0 ? (
-              <span className="text-lg font-bold">${product?.salePrice}</span>
-            ) : null}
-          </div>
+
+        <CardContent className="p-5">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">
+            {product?.title}
+          </h2>
+
+          <p className="text-xs text-gray-600 mb-3 line-clamp-2">
+            {product?.description || "No description provided."}
+          </p>
+
+          <span className="text-xl font-bold text-blue-700 tracking-wide">
+            ₱{product?.price}
+          </span>
         </CardContent>
-        <CardFooter className="flex justify-between items-center">
+
+        <CardFooter className="flex justify-between items-center px-5 pb-4">
           <Button
+            className="rounded-xl px-4 bg-blue-600 hover:bg-blue-700 hover:shadow-md transition"
             onClick={() => {
               setOpenCreateProductsDialog(true);
               setCurrentEditedId(product?._id);
@@ -43,7 +51,13 @@ function AdminProductTile({
           >
             Edit
           </Button>
-          <Button onClick={() => handleDelete(product?._id)}>Delete</Button>
+
+          <Button
+            className="rounded-xl px-4 bg-red-500 hover:bg-red-600 hover:shadow-md transition"
+            onClick={() => handleDelete(product?._id)}
+          >
+            Delete
+          </Button>
         </CardFooter>
       </div>
     </Card>

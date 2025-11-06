@@ -23,13 +23,10 @@ const initialFormData = {
   image: null,
   title: "",
   description: "",
-  category: "",
-  // brand: "",
   price: "",
-  salePrice: "",
-  totalStock: "",
   averageReview: 0,
 };
+
 
 function AdminProducts() {
   const [openCreateProductsDialog, setOpenCreateProductsDialog] =
@@ -90,10 +87,10 @@ function AdminProducts() {
   }
 
   function isFormValid() {
-    return Object.keys(formData)
-      .filter((currentKey) => currentKey !== "averageReview")
-      .map((key) => formData[key] !== "")
-      .every((item) => item);
+ return Object.keys(formData)
+  .filter((currentKey) => currentKey !== "averageReview" && currentKey !== "image")
+  .every((key) => formData[key] !== "");
+
   }
 
   useEffect(() => {
