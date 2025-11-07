@@ -6,6 +6,7 @@ import UserCartItemsContent from "./cart-items-content";
 function UserCartWrapper({ cartItems, setOpenCartSheet }) {
   const navigate = useNavigate();
 
+  // 🧮 Calculate total price
   const totalCartAmount =
     cartItems && cartItems.length > 0
       ? cartItems.reduce(
@@ -20,21 +21,33 @@ function UserCartWrapper({ cartItems, setOpenCartSheet }) {
       : 0;
 
   return (
-    <SheetContent className="sm:max-w-md">
+    // ✅ Add aria-describedby={undefined} to silence Radix warning
+    <SheetContent aria-describedby={undefined} className="sm:max-w-md">
       <SheetHeader>
         <SheetTitle>Your Cart</SheetTitle>
       </SheetHeader>
+
       <div className="mt-8 space-y-4">
-        {cartItems && cartItems.length > 0
-          ? cartItems.map((item) => <UserCartItemsContent cartItem={item} />)
-          : null}
+        {cartItems && cartItems.length > 0 ? (
+          cartItems.map((item) => (
+            // ✅ Use productId._id if productId is an object (populated), otherwise fallback
+            <UserCartItemsContent
+              key={item?.productId?._id || item?.productId || item?._id}
+              cartItem={item}
+            />
+          ))
+        ) : (
+          <p className="text-center text-gray-500">Your cart is empty</p>
+        )}
       </div>
+
       <div className="mt-8 space-y-4">
         <div className="flex justify-between">
           <span className="font-bold">Total</span>
-          <span className="font-bold">${totalCartAmount}</span>
+          <span className="font-bold">${totalCartAmount.toFixed(2)}</span>
         </div>
       </div>
+
       <Button
         onClick={() => {
           navigate("/shop/checkout");

@@ -8,6 +8,13 @@ import adminRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import session from "express-session";
 import passport from "passport";
+import productRoutes from "./routes/productRoutes.js";
+import commonRoutes from "./routes/commonRoutes.js";
+import cartRoutes from "./routes/cartRoutes.js";
+
+
+
+
 
 
 dotenv.config();
@@ -36,6 +43,12 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin/products", productRoutes);
+app.use("/api/shop/products", productRoutes);
+app.use("/uploads", express.static("uploads"));
+app.use("/api/common", commonRoutes);
+app.use("/api/shop/cart", cartRoutes);
+
 // Test endpoint to verify backend connectivity
 app.get("/api/test", (req, res) => {
   res.json({ message: "✅ Backend is running and reachable from frontend!" });

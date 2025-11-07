@@ -41,39 +41,63 @@ function ShoppingListing() {
   }
 
   function handleAddtoCart(getCurrentProductId, getTotalStock) {
-    let getCartItems = cartItems.items || [];
+  try {
+    if (!user || !user.id) {
+      toast({
+        title: "Please log in first to add items to your cart.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (getCartItems.length) {
-      const indexOfCurrentItem = getCartItems.findIndex(
-        (item) => item.productId === getCurrentProductId
-      );
-      if (indexOfCurrentItem > -1) {
-        const getQuantity = getCartItems[indexOfCurrentItem].quantity;
-        if (getQuantity + 1 > getTotalStock) {
-          toast({
-            title: `Only ${getQuantity} quantity can be added for this item`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
+    const getCartItems = cartItems?.items || [];
+
+    // Check stock for existing item
+    const existingItem = getCartItems.find(
+      (item) => item.productId === getCurrentProductId
+    );
+    if (existingItem && existingItem.quantity + 1 > getTotalStock) {
+      toast({
+        title: `Only ${getTotalStock} units available for this product.`,
+        variant: "destructive",
+      });
+      return;
     }
 
     dispatch(
       addToCart({
-        userId: user?.id,
+        userId: user.id,
         productId: getCurrentProductId,
         quantity: 1,
       })
-    ).then((data) => {
-      if (data?.payload?.success) {
-        dispatch(fetchCartItems(user?.id));
+    ).then((res) => {
+      const success = res?.payload?.success;
+      if (success) {
+        dispatch(fetchCartItems(user.id)); // fetch updated cart
         toast({
-          title: "Product is added to cart",
+          title: "Product added to cart!",
+        });
+      } else {
+        toast({
+          title: "Could not update your cart. Please try again.",
+          variant: "destructive",
         });
       }
     });
+  } catch (err) {
+    console.error("Error adding to cart:", err);
+    toast({
+      title: "Something went wrong while adding to cart.",
+      variant: "destructive",
+    });
   }
+}
+
+
+  useEffect(() => {
+  console.log("🧠 User from Redux:", user);
+}, [user]);
+
 
   useEffect(() => {
     setSort("price-lowtohigh");
