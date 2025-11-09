@@ -4,6 +4,8 @@ import Admin from "../models/admin.js";
 import User from "../models/User.js";
 import Customer from "../models/customer.js";
 import Driver from "../models/driver.js";
+import Order from "../models/order.js";
+
 
 
 
@@ -140,6 +142,36 @@ export const getAllDrivers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+// ✅ Approve Order and Assign Driver
+export const approveOrder = async (req, res) => {
+  try {
+    const { orderId, driverId } = req.body;
+
+    if (!driverId) {
+      return res.status(400).json({ message: "Driver is required" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    order.status = "accepted";
+    order.driverId = driverId;                 
+    order.assignedAt = new Date();             
+
+    await order.save();
+
+    res.json({
+      message: "Order approved and assigned to driver",
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 
 // Get all orders
 export const getAllOrders = async (req, res) => {

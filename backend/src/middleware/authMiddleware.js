@@ -10,19 +10,20 @@ export const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    // ✅ Always verify using your actual secret
+    // ✅ Verify token properly
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = decoded; // decoded contains { id, role }
+    // ✅ Normalize ID for all token formats
+    // Supports: { id }, { userId }
+    req.user = {
+      ...decoded,
+      id: decoded.id || decoded.userId
+    };
 
-    // ✅ Admin route check (kept as you intended)
+    // ✅ Admin-only route protection (your existing logic)
     if (req.baseUrl.includes("/api/admin") && decoded.role !== "admin") {
       return res.status(401).json({ message: "Access denied: Admins only" });
     }
-
-    // ✅ No need for the customer/shop logic you had.
-    // Your routes don't use /api/shop or /api/customers auth branching.
-    // So we simply continue.
 
     next();
   } catch (error) {

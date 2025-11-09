@@ -28,10 +28,17 @@ export default function AuthLogin() {
   // ✅ If already logged in, redirect
   useEffect(() => {
     if (isAuthenticated && user) {
-      const role = user.role?.toLowerCase();
-      if (role === "admin") navigate("/admin/dashboard");
-      else navigate("/shop/home");
-    }
+  const role = user.role?.toLowerCase();
+
+  if (role === "admin") {
+    navigate("/admin/dashboard");
+  } else if (role === "driver") {
+    navigate("/driver/dashboard");
+  } else {
+    navigate("/shop/home");
+  }
+}
+
   }, [isAuthenticated, user, navigate]);
 
   const handleChange = (e) => {

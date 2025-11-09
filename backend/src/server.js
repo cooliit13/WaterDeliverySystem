@@ -13,6 +13,7 @@ import commonRoutes from "./routes/commonRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import addressRoutes from "./routes/addressRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import driverRoutes from "./routes/driverRoutes.js";
 
 
 
@@ -54,6 +55,7 @@ app.use("/api/common", commonRoutes);
 app.use("/api/shop/cart", cartRoutes);
 app.use("/api/shop/address", addressRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/driver", driverRoutes);
 
 
 // Test endpoint to verify backend connectivity

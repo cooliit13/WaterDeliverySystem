@@ -4,7 +4,8 @@ import {
   updateUserStatus,
   deleteUser,
   getAllCustomers,
-  getAllDrivers
+  getAllDrivers,
+  approveOrder
 } from "../controllers/adminController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import Order from "../models/order.js";
@@ -26,6 +27,8 @@ router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
 
 router.get("/customers", authMiddleware, adminOnly, getAllCustomers);
 router.get("/drivers", authMiddleware, adminOnly, getAllDrivers);
+router.put("/orders/approve", authMiddleware, approveOrder);
+
 
 // ==========================================
 // ✅ FIXED ORDER ROUTES (NECESSARY CHANGES ONLY)

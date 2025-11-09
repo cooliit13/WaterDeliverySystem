@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
+import Order from "../models/order.js";   // ✅ REQUIRED
 
-
-//  Register Driver
+// ✅ REGISTER DRIVER
 export const registerDriver = async (req, res) => {
   try {
     const { name, email, password, contactNumber, vehicleNumber } = req.body;
@@ -33,7 +33,9 @@ export const registerDriver = async (req, res) => {
   }
 };
 
-//  Login Driver
+
+
+// ✅ LOGIN DRIVER
 export const loginDriver = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -45,7 +47,7 @@ export const loginDriver = async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: "Invalid password" });
 
     const token = jwt.sign(
-      { id: driver._id, role: "driver" },
+      { id: driver._id, role: "driver" },   // ✅ FIXED (id, not userId)
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -65,21 +67,28 @@ export const loginDriver = async (req, res) => {
   }
 };
 
-//  Get Driver Profile
+
+
+// ✅ GET DRIVER PROFILE
 export const getDriverProfile = async (req, res) => {
   try {
-    const driver = await Driver.findById(req.user.id).select("-password");
+    const driver = await Driver.findById(req.user.id).select("-password");   // ✅ FIXED
+
     if (!driver) return res.status(404).json({ message: "Driver not found" });
+
     res.json(driver);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-//  Update Driver Profile
+
+
+// ✅ UPDATE DRIVER PROFILE
 export const updateDriverProfile = async (req, res) => {
   try {
-    const driver = await Driver.findById(req.user.id);
+    const driver = await Driver.findById(req.user.id);   // ✅ FIXED
+
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
     driver.name = req.body.name || driver.name;
@@ -97,30 +106,71 @@ export const updateDriverProfile = async (req, res) => {
   }
 };
 
-//  View Assigned Orders
+
+
+// ✅ DRIVER GETS ASSIGNED & APPROVED ORDERS
 export const getAssignedOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ driver: req.user.id }).populate("customer");
+    const driverId = req.user.id;   // ✅ FIXED
+
+    const orders = await Order.find({
+      driverId: driverId,
+      status: { $in: ["accepted", "delivering"] },
+    }).populate("customerId", "fullName email phoneNumber");
+
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-//  Update Delivery Status
+
+
+// ✅ UPDATE DELIVERY STATUS
 export const updateDeliveryStatus = async (req, res) => {
   try {
-    const { orderId, status } = req.body;
+    const { orderId } = req.params;
+    const { status } = req.body;
+
     const order = await Order.findById(orderId);
-
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.driver.toString() !== req.user.id)
-      return res.status(403).json({ message: "Not authorized" });
 
-    order.status = status || order.status;
+    if (order.driverId?.toString() !== req.user.id) {   // ✅ FIXED
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    order.status = status;
     await order.save();
 
     res.json({ message: "Order status updated", order });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+// ✅ UPLOAD PROOF OF DELIVERY
+export const uploadProofOfDelivery = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const proofImage = "/uploads/proofs/" + req.file.filename;
+
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        proofImage,
+        status: "completed",
+      },
+      { new: true }
+    );
+
+    res.json({ message: "Proof uploaded successfully", order });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -5,43 +5,59 @@ const orderSchema = new mongoose.Schema(
   {
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",          // <-- use "User" so populate('customerId') returns user info
+      ref: "User",
       required: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Driver",
     },
+
+    // ✅ When admin assigns a driver
+    assignedAt: {
+      type: Date,
+    },
+
+    // ✅ Proof of delivery file path
+    proofOfDelivery: {
+      type: String,
+    },
+
     items: [
       {
         productId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",   // optional but useful for cross-referencing
-          required: false,  // keep optional if some older orders don't have it
+          ref: "Product",
+          required: false,
         },
         productName: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
       },
     ],
+
     totalAmount: {
       type: Number,
       required: true,
     },
+
     status: {
       type: String,
       enum: ["pending", "accepted", "delivering", "completed", "cancelled"],
       default: "pending",
     },
+
     paymentStatus: {
       type: String,
       enum: ["unpaid", "paid", "refunded"],
       default: "unpaid",
     },
+
     deliveryAddress: {
       type: String,
       required: true,
     },
+
     deliveryDate: {
       type: Date,
     },

@@ -17,11 +17,19 @@ import {
   getOrderDetailsForAdmin,
   resetOrderDetails,
 } from "@/store/admin/order-slice";
+import { getAllDrivers } from "@/store/admin/driver-slice";
 import { Badge } from "../ui/badge";
+import axios from "axios";
 
 function AdminOrdersView() {
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
+
+  // ✅ state for driver selection
+  const [selectedDrivers, setSelectedDrivers] = useState({});
+
   const { orderList, orderDetails } = useSelector((state) => state.adminOrder);
+  const { drivers } = useSelector((state) => state.adminDrivers);
+
   const dispatch = useDispatch();
 
   function handleFetchOrderDetails(id) {
@@ -33,8 +41,28 @@ function AdminOrdersView() {
   }, [dispatch]);
 
   useEffect(() => {
+    dispatch(getAllDrivers());
+  }, [dispatch]);
+
+  useEffect(() => {
     if (orderDetails !== null) setOpenDetailsDialog(true);
   }, [orderDetails]);
+
+  // Approve and assign driver
+  async function handleApprove(orderId, driverId) {
+    try {
+      await axios.put("http://localhost:5000/api/admin/orders/approve", {
+        orderId,
+        driverId,
+      });
+
+      dispatch(getAllOrdersForAdmin());
+      alert("Order approved and driver assigned");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to approve order");
+    }
+  }
 
   return (
     <Card>
@@ -50,6 +78,7 @@ function AdminOrdersView() {
               <TableHead>Order Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Total</TableHead>
+              <TableHead>Driver Assignment</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -60,12 +89,10 @@ function AdminOrdersView() {
                 <TableRow key={order._id}>
                   <TableCell>{order._id}</TableCell>
 
-                  {/* createdAt from backend */}
                   <TableCell>
                     {new Date(order.createdAt).toLocaleDateString()}
                   </TableCell>
 
-                  {/* status from backend */}
                   <TableCell>
                     <Badge
                       className={`py-1 px-3 ${
@@ -81,6 +108,40 @@ function AdminOrdersView() {
                   </TableCell>
 
                   <TableCell>₱{order.totalAmount}</TableCell>
+
+                  {/* ✅ FIXED DRIVER DROPDOWN */}
+                  <TableCell>
+                    <select
+                      value={selectedDrivers[order._id] || ""}
+                      onChange={(e) =>
+                        setSelectedDrivers({
+                          ...selectedDrivers,
+                          [order._id]: e.target.value,
+                        })
+                      }
+                      className="border p-2 rounded"
+                    >
+                      <option value="">Assign Driver</option>
+                      {drivers?.map((driver) => (
+                        <option key={driver._id} value={driver._id}>
+                          {driver.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <Button
+                      className="ml-2"
+                      onClick={() => {
+                        const driverId = selectedDrivers[order._id];
+                        if (!driverId)
+                          return alert("Select a driver first");
+
+                        handleApprove(order._id, driverId);
+                      }}
+                    >
+                      Approve
+                    </Button>
+                  </TableCell>
 
                   <TableCell>
                     <Dialog
@@ -101,7 +162,7 @@ function AdminOrdersView() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5}>No orders found</TableCell>
+                <TableCell colSpan={6}>No orders found</TableCell>
               </TableRow>
             )}
           </TableBody>

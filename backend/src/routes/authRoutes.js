@@ -228,5 +228,49 @@ router.get("/common/feature/get", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching images" });
   }
 });
+/* ----------------------------------------------
+   ✅ Check Auth (Fix for frontend 404)
+------------------------------------------------*/
+router.get("/check-auth", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        profileImage: user.profileImage,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+/* ----------------------------------------------
+   ✅ Check Auth (used by frontend auto-login)
+------------------------------------------------*/
+router.get("/check-auth", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select("-password");
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Check Auth Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 export default router;

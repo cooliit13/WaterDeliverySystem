@@ -1,4 +1,7 @@
 import express from "express";
+import multer from "multer";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+
 import {
   registerDriver,
   loginDriver,
@@ -6,19 +9,45 @@ import {
   updateDriverProfile,
   getAssignedOrders,
   updateDeliveryStatus,
+  uploadProofOfDelivery
 } from "../controllers/driverController.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Public
+/* ✅ Multer setup */
+const storage = multer.diskStorage({
+  destination: "uploads/proofs",
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
+
+const upload = multer({ storage });
+
+
+// ✅ PUBLIC ROUTES
 router.post("/register", registerDriver);
 router.post("/login", loginDriver);
 
-// Protected
+
+// ✅ PROTECTED ROUTES
 router.get("/profile", authMiddleware, getDriverProfile);
 router.put("/profile", authMiddleware, updateDriverProfile);
+
 router.get("/orders", authMiddleware, getAssignedOrders);
-router.put("/orders/status", authMiddleware, updateDeliveryStatus);
+
+router.put(
+  "/orders/:orderId/status",
+  authMiddleware,
+  updateDeliveryStatus
+);
+
+// ✅ UPLOAD PROOF OF DELIVERY
+router.post(
+  "/orders/:orderId/proof",
+  authMiddleware,
+  upload.single("proof"),
+  uploadProofOfDelivery
+);
 
 export default router;

@@ -30,8 +30,9 @@ const store = configureStore({
 
     commonFeature: commonFeatureSlice,
 
-    // ✅ Add this line
-    driver: driverSlice,
+  
+    adminDrivers: driverSlice,
+
   },
 });
 
