@@ -40,64 +40,63 @@ function ShoppingListing() {
     dispatch(fetchProductDetails(getCurrentProductId));
   }
 
+  // ✅ FIXED VERSION (minimal change: use res.error instead of success flag)
   function handleAddtoCart(getCurrentProductId, getTotalStock) {
-  try {
-    if (!user || !user.id) {
-      toast({
-        title: "Please log in first to add items to your cart.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const getCartItems = cartItems?.items || [];
-
-    // Check stock for existing item
-    const existingItem = getCartItems.find(
-      (item) => item.productId === getCurrentProductId
-    );
-    if (existingItem && existingItem.quantity + 1 > getTotalStock) {
-      toast({
-        title: `Only ${getTotalStock} units available for this product.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    dispatch(
-      addToCart({
-        userId: user.id,
-        productId: getCurrentProductId,
-        quantity: 1,
-      })
-    ).then((res) => {
-      const success = res?.payload?.success;
-      if (success) {
-        dispatch(fetchCartItems(user.id)); // fetch updated cart
+    try {
+      if (!user || !user.id) {
         toast({
-          title: "Product added to cart!",
-        });
-      } else {
-        toast({
-          title: "Could not update your cart. Please try again.",
+          title: "Please log in first to add items to your cart.",
           variant: "destructive",
         });
+        return;
       }
-    });
-  } catch (err) {
-    console.error("Error adding to cart:", err);
-    toast({
-      title: "Something went wrong while adding to cart.",
-      variant: "destructive",
-    });
-  }
-}
 
+      const getCartItems = cartItems?.items || [];
+
+      // Check stock for existing item
+      const existingItem = getCartItems.find(
+        (item) => item.productId === getCurrentProductId
+      );
+      if (existingItem && existingItem.quantity + 1 > getTotalStock) {
+        toast({
+          title: `Only ${getTotalStock} units available for this product.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      dispatch(
+        addToCart({
+          productId: getCurrentProductId,
+          quantity: 1,
+        })
+      ).then((res) => {
+
+        // ✅ NEW: Check if thunk succeeded
+        if (!res.error) {
+          dispatch(fetchCartItems());
+          toast({
+            title: "Product added to cart!",
+          });
+        } else {
+          toast({
+            title: "Could not update your cart. Please try again.",
+            variant: "destructive",
+          });
+        }
+      });
+    } catch (err) {
+      console.error("Error adding to cart:", err);
+      toast({
+        title: "Something went wrong while adding to cart.",
+        variant: "destructive",
+      });
+    }
+  }
 
   useEffect(() => {
-  console.log("🧠 User from Redux:", user);
-}, [user]);
-
+    console.log("🧠 User from Redux:", user);
+  }, [user]);
 
   useEffect(() => {
     setSort("price-lowtohigh");

@@ -56,10 +56,50 @@ export const sortOptions = [
 // ======================
 // Address Form Controls
 // ======================
+// ======================
+// Address Form Controls
+// ======================
 export const addressFormControls = [
-  { label: "Address", name: "address", componentType: "input", type: "text", placeholder: "Enter your address" },
-  { label: "City", name: "city", componentType: "input", type: "text", placeholder: "Enter your city" },
-  { label: "Pincode", name: "pincode", componentType: "input", type: "text", placeholder: "Enter your pincode" },
-  { label: "Phone", name: "phone", componentType: "input", type: "text", placeholder: "Enter your phone number" },
-  { label: "Notes", name: "notes", componentType: "textarea", placeholder: "Enter any additional notes" },
+  {
+    label: "Full Name",
+    name: "fullName",
+    componentType: "input",
+    type: "text",
+    placeholder: "Enter full name",
+  },
+  {
+    label: "Street",
+    name: "street",
+    componentType: "input",
+    type: "text",
+    placeholder: "Enter street / house no.",
+  },
+  {
+    label: "Province",
+    name: "province",
+    componentType: "input",
+    type: "text",
+    placeholder: "Enter province",
+  },
+  {
+    label: "Postal Code",
+    name: "postalCode",
+    componentType: "input",
+    type: "text",
+    placeholder: "Enter postal code",
+  },
+  {
+    label: "Phone Number",
+    name: "phoneNumber",
+    componentType: "input",
+    type: "text",
+    placeholder: "Enter phone number",
+  },
+  {
+    label: "Notes",
+    name: "notes",
+    componentType: "textarea",
+    placeholder: "Optional notes",
+  },
 ];
+

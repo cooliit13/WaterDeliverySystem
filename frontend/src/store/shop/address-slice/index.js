@@ -6,18 +6,20 @@ const initialState = {
   addressList: [],
 };
 
+// ADD NEW ADDRESS (now accepts already-correct backend payload)
 export const addNewAddress = createAsyncThunk(
   "/addresses/addNewAddress",
-  async (formData) => {
+  async (payload) => {
     const response = await axios.post(
       "http://localhost:5000/api/shop/address/add",
-      formData
+      payload
     );
 
     return response.data;
   }
 );
 
+// FETCH ALL
 export const fetchAllAddresses = createAsyncThunk(
   "/addresses/fetchAllAddresses",
   async (userId) => {
@@ -29,6 +31,7 @@ export const fetchAllAddresses = createAsyncThunk(
   }
 );
 
+// EDIT ADDRESS (now directly uses backend-ready payload)
 export const editaAddress = createAsyncThunk(
   "/addresses/editaAddress",
   async ({ userId, addressId, formData }) => {
@@ -41,6 +44,7 @@ export const editaAddress = createAsyncThunk(
   }
 );
 
+// DELETE ADDRESS
 export const deleteAddress = createAsyncThunk(
   "/addresses/deleteAddress",
   async ({ userId, addressId }) => {
@@ -58,21 +62,24 @@ const addressSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
+      // ADD
       .addCase(addNewAddress.pending, (state) => {
         state.isLoading = true;
       })
-      .addCase(addNewAddress.fulfilled, (state, action) => {
+      .addCase(addNewAddress.fulfilled, (state) => {
         state.isLoading = false;
       })
       .addCase(addNewAddress.rejected, (state) => {
         state.isLoading = false;
       })
+
+      // FETCH
       .addCase(fetchAllAddresses.pending, (state) => {
         state.isLoading = true;
       })
       .addCase(fetchAllAddresses.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.addressList = action.payload.data;
+        state.addressList = action.payload.addresses || [];
       })
       .addCase(fetchAllAddresses.rejected, (state) => {
         state.isLoading = false;

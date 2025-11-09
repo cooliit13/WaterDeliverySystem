@@ -6,35 +6,51 @@ const initialState = {
   orderDetails: null,
 };
 
+// ✅ Get All Orders (ADMIN)
 export const getAllOrdersForAdmin = createAsyncThunk(
   "/order/getAllOrdersForAdmin",
-  async () => {
+  async (_, { getState }) => {
+    const token = getState().auth.token;
+
     const response = await axios.get(
-      `http://localhost:5000/api/admin/orders/get`
+      `http://localhost:5000/api/admin/orders/get`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
 
     return response.data;
   }
 );
 
+// ✅ Get Order Details
 export const getOrderDetailsForAdmin = createAsyncThunk(
   "/order/getOrderDetailsForAdmin",
-  async (id) => {
+  async (id, { getState }) => {
+    const token = getState().auth.token;
+
     const response = await axios.get(
-      `http://localhost:5000/api/admin/orders/details/${id}`
+      `http://localhost:5000/api/admin/orders/details/${id}`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
 
     return response.data;
   }
 );
 
+// ✅ Update Order Status
 export const updateOrderStatus = createAsyncThunk(
   "/order/updateOrderStatus",
-  async ({ id, orderStatus }) => {
+  async ({ id, orderStatus }, { getState }) => {
+    const token = getState().auth.token;
+
     const response = await axios.put(
       `http://localhost:5000/api/admin/orders/update/${id}`,
+      { status: orderStatus },
       {
-        orderStatus,
+        headers: { Authorization: `Bearer ${token}` }
       }
     );
 
@@ -47,34 +63,16 @@ const adminOrderSlice = createSlice({
   initialState,
   reducers: {
     resetOrderDetails: (state) => {
-      console.log("resetOrderDetails");
-
       state.orderDetails = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(getAllOrdersForAdmin.pending, (state) => {
-        state.isLoading = true;
-      })
       .addCase(getAllOrdersForAdmin.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.orderList = action.payload.data;
-      })
-      .addCase(getAllOrdersForAdmin.rejected, (state) => {
-        state.isLoading = false;
-        state.orderList = [];
-      })
-      .addCase(getOrderDetailsForAdmin.pending, (state) => {
-        state.isLoading = true;
+        state.orderList = action.payload.orders;
       })
       .addCase(getOrderDetailsForAdmin.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.orderDetails = action.payload.data;
-      })
-      .addCase(getOrderDetailsForAdmin.rejected, (state) => {
-        state.isLoading = false;
-        state.orderDetails = null;
+        state.orderDetails = action.payload.order;
       });
   },
 });

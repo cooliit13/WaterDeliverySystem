@@ -1,12 +1,14 @@
 import axios from "axios";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
+const API = "http://localhost:5000/api/shop/cart";
+
 const initialState = {
-  cartItems: { items: [] }, // ✅ always has items array to prevent undefined errors
+  cartItems: { items: [] },
   isLoading: false,
 };
 
-// ✅ Helper to attach token to requests
+// Attach token
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return {
@@ -16,71 +18,66 @@ const getAuthHeader = () => {
   };
 };
 
-// 🛒 ADD TO CART
+// ✅ ADD ITEM (correct endpoint)
 export const addToCart = createAsyncThunk(
   "cart/addToCart",
-  async ({ userId, productId, quantity }, { rejectWithValue }) => {
+  async ({ productId, quantity }, { rejectWithValue }) => {
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/shop/cart/add",
-        { userId, productId, quantity },
+        `${API}/add`,
+        { productId, quantity },
         getAuthHeader()
       );
-      return response.data;
+
+      return response.data.cart;
     } catch (error) {
-      console.error("❌ Add to cart error:", error.response?.data || error.message);
-      return rejectWithValue(error.response?.data || { message: "Add to cart failed" });
+      return rejectWithValue(error.response?.data || { message: "Add failed" });
     }
   }
 );
 
-// 🛍 FETCH CART ITEMS
+// ✅ GET CART
 export const fetchCartItems = createAsyncThunk(
   "cart/fetchCartItems",
-  async (userId, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(
-        `http://localhost:5000/api/shop/cart/get/${userId}`,
-        getAuthHeader()
-      );
-      return response.data;
+      const response = await axios.get(`${API}/get`, getAuthHeader());
+      return response.data.cart;
     } catch (error) {
-      console.error("❌ Fetch cart items error:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data || { message: "Fetch failed" });
     }
   }
 );
 
-// ❌ DELETE CART ITEM
+// ✅ DELETE ITEM
 export const deleteCartItem = createAsyncThunk(
   "cart/deleteCartItem",
-  async ({ userId, productId }, { rejectWithValue }) => {
+  async (productId, { rejectWithValue }) => {
     try {
       const response = await axios.delete(
-        `http://localhost:5000/api/shop/cart/${userId}/${productId}`,
+        `${API}/remove/${productId}`,
         getAuthHeader()
       );
-      return response.data;
+      return response.data.cart;
     } catch (error) {
-      console.error("❌ Delete cart error:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data || { message: "Delete failed" });
     }
   }
 );
 
-// 🔁 UPDATE QUANTITY
+// ✅ UPDATE QUANTITY
 export const updateCartQuantity = createAsyncThunk(
   "cart/updateCartQuantity",
-  async ({ userId, productId, quantity }, { rejectWithValue }) => {
+  async ({ productId, quantity }, { rejectWithValue }) => {
     try {
       const response = await axios.put(
-        "http://localhost:5000/api/shop/cart/update-cart",
-        { userId, productId, quantity },
+        `${API}/update`,
+        { productId, quantity },
         getAuthHeader()
       );
-      return response.data;
+
+      return response.data.cart;
     } catch (error) {
-      console.error("❌ Update quantity error:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data || { message: "Update failed" });
     }
   }
@@ -91,59 +88,30 @@ const shoppingCartSlice = createSlice({
   initialState,
   reducers: {
     clearCart: (state) => {
-      state.cartItems = { items: [] }; // ✅ safely clear cart
+      state.cartItems = { items: [] };
     },
   },
   extraReducers: (builder) => {
     builder
-      // 🛒 Add to Cart
-      .addCase(addToCart.pending, (state) => {
-        state.isLoading = true;
-      })
+      // ADD TO CART
       .addCase(addToCart.fulfilled, (state, action) => {
-        state.isLoading = false;
-        // ✅ Normalize backend data shape
-        const data = action.payload?.data || action.payload?.cart || { items: [] };
-        state.cartItems = Array.isArray(data)
-          ? { items: data }
-          : data;
-      })
-      .addCase(addToCart.rejected, (state) => {
-        state.isLoading = false;
+        state.cartItems = action.payload;
+
       })
 
-      // 🛍 Fetch Cart Items
-      .addCase(fetchCartItems.pending, (state) => {
-        state.isLoading = true;
-      })
+      // FETCH
       .addCase(fetchCartItems.fulfilled, (state, action) => {
-        state.isLoading = false;
-        const data = action.payload?.data || action.payload?.cart || { items: [] };
-        state.cartItems = Array.isArray(data)
-          ? { items: data }
-          : data;
-      })
-      .addCase(fetchCartItems.rejected, (state) => {
-        state.isLoading = false;
-        state.cartItems = { items: [] };
+        state.cartItems = action.payload;
       })
 
-      // 🗑 Delete Cart Item
+      // DELETE
       .addCase(deleteCartItem.fulfilled, (state, action) => {
-        state.isLoading = false;
-        const data = action.payload?.data || { items: [] };
-        state.cartItems = Array.isArray(data)
-          ? { items: data }
-          : data;
+        state.cartItems = action.payload;
       })
 
-      // 🔁 Update Cart Quantity
+      // UPDATE
       .addCase(updateCartQuantity.fulfilled, (state, action) => {
-        state.isLoading = false;
-        const data = action.payload?.data || { items: [] };
-        state.cartItems = Array.isArray(data)
-          ? { items: data }
-          : data;
+        state.cartItems = action.payload;
       });
   },
 });

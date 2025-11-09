@@ -1,46 +1,162 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+    import express from "express";
+    import Order from "../models/order.js";
 
-const router = express.Router();
+    const router = express.Router();
 
-router.post('/register', async (req, res) => {
+    /* ---------------------------------------------
+      CUSTOMER REQUEST PURCHASE
+    ---------------------------------------------- */
+    router.post("/request-purchase", async (req, res) => {
+      console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
+      
+      try {
+        const { userId, cartItems, totalAmount, addressInfo } = req.body;
+        console.log("Incoming order data:", req.body);
 
-    try {
-  const { name, email, password, role } = req.body;
- const userExists = await User.findOne({email});
-    if (userExists) return res.status(400).json({ message: 'User already exists' });
+        // Validate fields
+        if (!userId || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
+          return res.status(400).json({
+            success: false,
+            message: "Missing required fields"
+          });
+        }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+        // Convert cartItems array to DB format
+        const formattedItems = cartItems.map((item) => ({
+          productName: item.productName || "Unknown Product",
+          quantity: item.quantity,
+          price: item.price
+        }));
 
-    const user= await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role
+        // Convert address object to text
+        const formattedAddress = `
+    ${addressInfo.address}, 
+    ${addressInfo.city}, 
+    ${addressInfo.pincode}
+    Phone: ${addressInfo.phone}
+    Notes: ${addressInfo.notes || "None"}
+    `.trim();
+
+        // Create order in DB
+        const newOrder = await Order.create({
+          customerId: userId,
+          items: formattedItems,
+          totalAmount,
+          deliveryAddress: formattedAddress,
+          status: "pending",
+          paymentStatus: "unpaid",
+          deliveryDate: null
+        });
+
+        return res.status(201).json({
+          success: true,
+          message: "Purchase request successfully submitted",
+          order: newOrder
+        });
+
+      } catch (err) {
+        console.error("Request purchase error:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Server error. Failed to submit purchase request."
+        });
+      }
     });
 
-    res.status(201).json({ message: 'User registered successfully' });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
 
-router.post('/login', async (req, res) => {
-    try {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+    /* ---------------------------------------------
+      ADMIN: GET ALL PENDING ORDERS
+    ---------------------------------------------- */
+    router.get("/pending", async (req, res) => {
+      try {
+        const orders = await Order.find({ status: "pending" }).sort({
+          createdAt: -1,
+        });
 
-     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+        res.json({
+          success: true,
+          orders
+        });
+      } catch (err) {
+        console.error("Pending orders error:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({message: "Login successful", token });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
+    /* ---------------------------------------------
+      ADMIN: ACCEPT ORDER
+    ---------------------------------------------- */
+    router.put("/accept/:orderId", async (req, res) => {
+      try {
+        const order = await Order.findById(req.params.orderId);
+        if (!order)
+          return res.status(404).json({ success: false, message: "Order not found" });
 
-module.exports = router;
+        order.status = "accepted";
+        await order.save();
+
+        res.json({ success: true, message: "Order accepted" });
+      } catch (err) {
+        console.error("Accept error:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    /* ---------------------------------------------
+      ADMIN: CANCEL ORDER
+    ---------------------------------------------- */
+    router.put("/cancel/:orderId", async (req, res) => {
+      try {
+        const order = await Order.findById(req.params.orderId);
+        if (!order)
+          return res.status(404).json({ success: false, message: "Order not found" });
+
+        order.status = "cancelled";
+        await order.save();
+
+        res.json({ success: true, message: "Order cancelled" });
+      } catch (err) {
+        console.error("Cancel error:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    /* ---------------------------------------------
+      USER: GET ALL ORDERS BY USER
+    ---------------------------------------------- */
+    router.get("/user/:id", async (req, res) => {
+      try {
+        const orders = await Order.find({ customerId: req.params.id }).sort({
+          createdAt: -1,
+        });
+
+        res.json({
+          success: true,
+          data: orders,
+        });
+      } catch (err) {
+        console.error("User orders error:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    /* ---------------------------------------------
+      USER: GET ORDER DETAILS
+    ---------------------------------------------- */
+    router.get("/details/:id", async (req, res) => {
+      try {
+        const order = await Order.findById(req.params.id);
+        if (!order)
+          return res.status(404).json({ success: false, message: "Order not found" });
+
+        res.json({
+          success: true,
+          data: order,
+        });
+      } catch (err) {
+        console.error("Order details error:", err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    export default router;

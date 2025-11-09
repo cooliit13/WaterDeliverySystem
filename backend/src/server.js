@@ -11,6 +11,9 @@ import passport from "passport";
 import productRoutes from "./routes/productRoutes.js";
 import commonRoutes from "./routes/commonRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
+import addressRoutes from "./routes/addressRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+
 
 
 
@@ -36,6 +39,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 //  API Routes
 app.use("/api/auth", authRoutes);
@@ -48,6 +52,9 @@ app.use("/api/shop/products", productRoutes);
 app.use("/uploads", express.static("uploads"));
 app.use("/api/common", commonRoutes);
 app.use("/api/shop/cart", cartRoutes);
+app.use("/api/shop/address", addressRoutes);
+app.use("/api/orders", orderRoutes);
+
 
 // Test endpoint to verify backend connectivity
 app.get("/api/test", (req, res) => {

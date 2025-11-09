@@ -6,19 +6,19 @@ import UserCartItemsContent from "./cart-items-content";
 function UserCartWrapper({ cartItems, setOpenCartSheet }) {
   const navigate = useNavigate();
 
-  // 🧮 Calculate total price
-  const totalCartAmount =
-    cartItems && cartItems.length > 0
-      ? cartItems.reduce(
-          (sum, currentItem) =>
-            sum +
-            (currentItem?.salePrice > 0
-              ? currentItem?.salePrice
-              : currentItem?.price) *
-              currentItem?.quantity,
-          0
-        )
-      : 0;
+  // total calculation
+const totalCartAmount = Array.isArray(cartItems)
+  ? cartItems.reduce((sum, item) => {
+      const product = item?.productId || {};
+      const price =
+        product.salePrice > 0
+          ? product.salePrice
+          : product.price || 0;
+
+      return sum + price * (item?.quantity || 0);
+    }, 0)
+  : 0;
+
 
   return (
     // ✅ Add aria-describedby={undefined} to silence Radix warning
@@ -44,7 +44,7 @@ function UserCartWrapper({ cartItems, setOpenCartSheet }) {
       <div className="mt-8 space-y-4">
         <div className="flex justify-between">
           <span className="font-bold">Total</span>
-          <span className="font-bold">${totalCartAmount.toFixed(2)}</span>
+          <span className="font-bold">₱{totalCartAmount.toFixed(2)}</span>
         </div>
       </div>
 
