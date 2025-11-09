@@ -4,7 +4,7 @@ import { DialogContent } from "../ui/dialog";
 import { Label } from "../ui/label";
 import { Separator } from "../ui/separator";
 import { Badge } from "../ui/badge";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import {
   getAllOrdersForAdmin,
   getOrderDetailsForAdmin,
@@ -12,13 +12,13 @@ import {
 } from "@/store/admin/order-slice";
 import { useToast } from "../ui/use-toast";
 
+
 const initialFormData = {
   status: "",
 };
 
 function AdminOrderDetailsView({ orderDetails }) {
   const [formData, setFormData] = useState(initialFormData);
-  const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const { toast } = useToast();
 
@@ -28,7 +28,7 @@ function AdminOrderDetailsView({ orderDetails }) {
     dispatch(
       updateOrderStatus({
         id: orderDetails?._id,
-        status: formData.status,
+        orderStatus: formData.status,
       })
     ).then((data) => {
       if (data?.payload?.success) {
@@ -43,7 +43,7 @@ function AdminOrderDetailsView({ orderDetails }) {
   return (
     <DialogContent className="sm:max-w-[600px]">
       <div className="grid gap-6">
-        
+
         {/* Order summary */}
         <div className="grid gap-2">
           <div className="flex mt-6 justify-between">
@@ -107,10 +107,16 @@ function AdminOrderDetailsView({ orderDetails }) {
 
         {/* Delivery Info */}
         <div className="grid gap-4">
-          <div className="font-medium">Delivery Address</div>
+          <div className="font-medium">Customer Info</div>
 
           <div className="grid gap-1 text-muted-foreground">
-            <span>{user?.userName}</span>
+            <span>Name: {orderDetails?.customerId?.fullName}</span>
+            <span>Email: {orderDetails?.customerId?.email}</span>
+          </div>
+
+          <div className="font-medium mt-4">Delivery Address</div>
+
+          <div className="grid gap-1 text-muted-foreground">
             <span>{orderDetails?.deliveryAddress}</span>
 
             {orderDetails?.deliveryDate && (

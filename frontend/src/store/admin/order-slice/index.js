@@ -6,7 +6,31 @@ const initialState = {
   orderDetails: null,
 };
 
-// ✅ Get All Orders (ADMIN)
+/* ---------------------------------------------------------
+   ✅ ADD THIS — CUSTOMER REQUEST PURCHASE
+---------------------------------------------------------- */
+export const requestPurchase = createAsyncThunk(
+  "order/requestPurchase",
+  async (orderData, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/orders/request-purchase",
+        orderData,
+        { withCredentials: true }
+      );
+
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data || "Failed to submit purchase request"
+      );
+    }
+  }
+);
+
+/* ---------------------------------------------------------
+   ✅ ADMIN GET ALL ORDERS
+---------------------------------------------------------- */
 export const getAllOrdersForAdmin = createAsyncThunk(
   "/order/getAllOrdersForAdmin",
   async (_, { getState }) => {
@@ -48,7 +72,7 @@ export const updateOrderStatus = createAsyncThunk(
 
     const response = await axios.put(
       `http://localhost:5000/api/admin/orders/update/${id}`,
-      { status: orderStatus },
+      { orderStatus },         // ✅ FIXED
       {
         headers: { Authorization: `Bearer ${token}` }
       }
@@ -57,6 +81,7 @@ export const updateOrderStatus = createAsyncThunk(
     return response.data;
   }
 );
+
 
 const adminOrderSlice = createSlice({
   name: "adminOrderSlice",
@@ -73,6 +98,13 @@ const adminOrderSlice = createSlice({
       })
       .addCase(getOrderDetailsForAdmin.fulfilled, (state, action) => {
         state.orderDetails = action.payload.order;
+      })
+
+      /* ---------------------------------------------------------
+         ✅ ADD THIS — HANDLE PURCHASE REQUEST
+      ---------------------------------------------------------- */
+      .addCase(requestPurchase.fulfilled, (state, action) => {
+        console.log("✅ Purchase request submitted:", action.payload);
       });
   },
 });

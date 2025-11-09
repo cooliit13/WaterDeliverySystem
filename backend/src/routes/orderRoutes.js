@@ -1,162 +1,224 @@
-    import express from "express";
-    import Order from "../models/order.js";
+import express from "express";
+import Order from "../models/order.js";
 
-    const router = express.Router();
+const router = express.Router();
 
-    /* ---------------------------------------------
-      CUSTOMER REQUEST PURCHASE
-    ---------------------------------------------- */
-    router.post("/request-purchase", async (req, res) => {
-      console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
-      
-      try {
-        const { userId, cartItems, totalAmount, addressInfo } = req.body;
-        console.log("Incoming order data:", req.body);
+/* ---------------------------------------------
+  CUSTOMER REQUEST PURCHASE
+---------------------------------------------- */
+router.post("/request-purchase", async (req, res) => {
+  console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
+  
+  try {
+    const { userId, cartItems, totalAmount, addressInfo } = req.body;
+    console.log("Incoming order data:", req.body);
 
-        // Validate fields
-        if (!userId || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
-          return res.status(400).json({
-            success: false,
-            message: "Missing required fields"
-          });
-        }
+    // Validate fields
+    if (!userId && !req.body.customerId || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
 
-        // Convert cartItems array to DB format
-        const formattedItems = cartItems.map((item) => ({
-          productName: item.productName || "Unknown Product",
-          quantity: item.quantity,
-          price: item.price
-        }));
+    // Convert cartItems to DB format
+    const formattedItems = cartItems.map((item) => ({
+      productName: item.productName || "Unknown Product",
+      quantity: item.quantity,
+      price: item.price
+    }));
 
-        // Convert address object to text
-        const formattedAddress = `
-    ${addressInfo.address}, 
-    ${addressInfo.city}, 
-    ${addressInfo.pincode}
-    Phone: ${addressInfo.phone}
-    Notes: ${addressInfo.notes || "None"}
-    `.trim();
+    // Convert address object to text
+    const formattedAddress = `
+${addressInfo.address}, 
+${addressInfo.city}, 
+${addressInfo.pincode}
+Phone: ${addressInfo.phone}
+Notes: ${addressInfo.notes || "None"}
+`.trim();
 
-        // Create order in DB
-        const newOrder = await Order.create({
-          customerId: userId,
-          items: formattedItems,
-          totalAmount,
-          deliveryAddress: formattedAddress,
-          status: "pending",
-          paymentStatus: "unpaid",
-          deliveryDate: null
-        });
+    // ✅ FIXED HERE
+    const customerId = req.body.customerId || userId;
 
-        return res.status(201).json({
-          success: true,
-          message: "Purchase request successfully submitted",
-          order: newOrder
-        });
-
-      } catch (err) {
-        console.error("Request purchase error:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Server error. Failed to submit purchase request."
-        });
-      }
+    // Create order in DB
+    const newOrder = await Order.create({
+      customerId,
+      items: formattedItems,
+      totalAmount,
+      deliveryAddress: formattedAddress,
+      status: "pending",
+      paymentStatus: "unpaid",
+      deliveryDate: null
     });
 
-
-    /* ---------------------------------------------
-      ADMIN: GET ALL PENDING ORDERS
-    ---------------------------------------------- */
-    router.get("/pending", async (req, res) => {
-      try {
-        const orders = await Order.find({ status: "pending" }).sort({
-          createdAt: -1,
-        });
-
-        res.json({
-          success: true,
-          orders
-        });
-      } catch (err) {
-        console.error("Pending orders error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
-      }
+    return res.status(201).json({
+      success: true,
+      message: "Purchase request successfully submitted",
+      order: newOrder
     });
 
-    /* ---------------------------------------------
-      ADMIN: ACCEPT ORDER
-    ---------------------------------------------- */
-    router.put("/accept/:orderId", async (req, res) => {
-      try {
-        const order = await Order.findById(req.params.orderId);
-        if (!order)
-          return res.status(404).json({ success: false, message: "Order not found" });
+  } catch (err) {
+    console.error("Request purchase error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error. Failed to submit purchase request."
+    });
+  }
+});
 
-        order.status = "accepted";
-        await order.save();
-
-        res.json({ success: true, message: "Order accepted" });
-      } catch (err) {
-        console.error("Accept error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
-      }
+/* ---------------------------------------------
+  ADMIN: GET ALL PENDING ORDERS
+---------------------------------------------- */
+router.get("/pending", async (req, res) => {
+  try {
+    const orders = await Order.find({ status: "pending" }).sort({
+      createdAt: -1,
     });
 
-    /* ---------------------------------------------
-      ADMIN: CANCEL ORDER
-    ---------------------------------------------- */
-    router.put("/cancel/:orderId", async (req, res) => {
-      try {
-        const order = await Order.findById(req.params.orderId);
-        if (!order)
-          return res.status(404).json({ success: false, message: "Order not found" });
+    res.json({
+      success: true,
+      orders
+    });
+  } catch (err) {
+    console.error("Pending orders error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
-        order.status = "cancelled";
-        await order.save();
+/* ---------------------------------------------
+  ADMIN: ACCEPT ORDER
+---------------------------------------------- */
+router.put("/accept/:orderId", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
 
-        res.json({ success: true, message: "Order cancelled" });
-      } catch (err) {
-        console.error("Cancel error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
-      }
+    order.status = "accepted";
+    await order.save();
+
+    res.json({ success: true, message: "Order accepted" });
+  } catch (err) {
+    console.error("Accept error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ---------------------------------------------
+  ADMIN: CANCEL ORDER
+---------------------------------------------- */
+router.put("/cancel/:orderId", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
+
+    order.status = "cancelled";
+    await order.save();
+
+    res.json({ success: true, message: "Order cancelled" });
+  } catch (err) {
+    console.error("Cancel error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ---------------------------------------------
+  USER: GET ALL ORDERS BY USER
+---------------------------------------------- */
+router.get("/user/:id", async (req, res) => {
+  try {
+    const orders = await Order.find({ customerId: req.params.id }).sort({
+      createdAt: -1,
     });
 
-    /* ---------------------------------------------
-      USER: GET ALL ORDERS BY USER
-    ---------------------------------------------- */
-    router.get("/user/:id", async (req, res) => {
-      try {
-        const orders = await Order.find({ customerId: req.params.id }).sort({
-          createdAt: -1,
-        });
-
-        res.json({
-          success: true,
-          data: orders,
-        });
-      } catch (err) {
-        console.error("User orders error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
-      }
+    res.json({
+      success: true,
+      data: orders,
     });
+  } catch (err) {
+    console.error("User orders error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
-    /* ---------------------------------------------
-      USER: GET ORDER DETAILS
-    ---------------------------------------------- */
-    router.get("/details/:id", async (req, res) => {
-      try {
-        const order = await Order.findById(req.params.id);
-        if (!order)
-          return res.status(404).json({ success: false, message: "Order not found" });
+/* ---------------------------------------------
+  USER: GET ORDER DETAILS
+---------------------------------------------- */
+router.get("/details/:id", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
 
-        res.json({
-          success: true,
-          data: order,
-        });
-      } catch (err) {
-        console.error("Order details error:", err);
-        res.status(500).json({ success: false, message: "Server error" });
-      }
+    res.json({
+      success: true,
+      data: order,
     });
+  } catch (err) {
+    console.error("Order details error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+/* ---------------------------------------------
+  ADMIN: GET ALL ORDERS
+---------------------------------------------- */
+router.get("/admin/orders/get", async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .populate("customerId", "firstname lastname")
+      .sort({ createdAt: -1 });
 
-    export default router;
+    res.json({ success: true, orders });
+  } catch (err) {
+    console.error("Admin get orders error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ---------------------------------------------
+  ADMIN: GET ORDER DETAILS
+---------------------------------------------- */
+router.get("/admin/orders/details/:id", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate("customerId", "firstname lastname");
+
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
+
+    res.json({ success: true, order });
+  } catch (err) {
+    console.error("Admin details error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ---------------------------------------------
+  ADMIN: UPDATE ORDER STATUS
+---------------------------------------------- */
+router.put("/admin/orders/update/:id", async (req, res) => {
+  try {
+    const { orderStatus } = req.body;
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: orderStatus },
+      { new: true }
+    );
+
+    if (!updatedOrder)
+      return res.status(404).json({ success: false, message: "Order not found" });
+
+    res.json({
+      success: true,
+      message: "Order status updated",
+      order: updatedOrder
+    });
+  } catch (err) {
+    console.error("Admin update status error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+export default router;

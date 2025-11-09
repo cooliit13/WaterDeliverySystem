@@ -1,18 +1,24 @@
+// models/order.js
 import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema(
   {
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer",
+      ref: "User",          // <-- use "User" so populate('customerId') returns user info
       required: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Driver",
+      ref: "User",
     },
     items: [
       {
+        productId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",   // optional but useful for cross-referencing
+          required: false,  // keep optional if some older orders don't have it
+        },
         productName: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
