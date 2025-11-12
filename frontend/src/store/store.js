@@ -11,8 +11,8 @@ import shopSearchSlice from "./shop/search-slice";
 import shopReviewSlice from "./shop/review-slice";
 import commonFeatureSlice from "./common-slice";
 
-// ✅ Import your new driver slice
-import driverSlice from "./driver-slice";
+// ✅ FIXED: Import the correct admin driver slice path
+import adminDriversReducer from "./admin/driver-slice"; 
 
 const store = configureStore({
   reducer: {
@@ -20,6 +20,7 @@ const store = configureStore({
 
     adminProducts: adminProductsSlice,
     adminOrder: adminOrderSlice,
+    adminDrivers: adminDriversReducer, // ✅ This now matches the correct slice key
 
     shopProducts: shopProductsSlice,
     shopCart: shopCartSlice,
@@ -29,10 +30,6 @@ const store = configureStore({
     shopReview: shopReviewSlice,
 
     commonFeature: commonFeatureSlice,
-
-  
-    adminDrivers: driverSlice,
-
   },
 });
 

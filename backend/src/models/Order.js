@@ -8,9 +8,11 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
+    // ✅ Driver reference fixed
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Driver",
+      ref: "User", // changed from "Driver"
     },
 
     // ✅ When admin assigns a driver
@@ -61,10 +63,15 @@ const orderSchema = new mongoose.Schema(
     deliveryDate: {
       type: Date,
     },
+
+    // ✅ NEW: store geocoded coordinates for faster mapping
+    deliveryLocation: {
+      lat: { type: Number },
+      lng: { type: Number },
+    },
   },
   { timestamps: true }
 );
 
 const Order = mongoose.model("Order", orderSchema);
-
 export default Order;

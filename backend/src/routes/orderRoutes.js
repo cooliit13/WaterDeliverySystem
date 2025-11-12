@@ -14,7 +14,7 @@ router.post("/request-purchase", async (req, res) => {
 
     console.log("Incoming order data:", req.body);
 
-    if (!userId && !req.body.customerId || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
+    if ((!userId && !req.body.customerId) || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields"
@@ -82,24 +82,25 @@ router.get("/pending", async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ADMIN: ACCEPT ORDER
+  ✅ ADMIN: APPROVE ORDER (assign driver)
 ---------------------------------------------- */
-router.put("/accept/:orderId", async (req, res) => {
+router.put("/admin/orders/approve", async (req, res) => {
   try {
-    const { driverId } = req.body; // ✅ Get driverId from request body
+    const { orderId, driverId } = req.body;
 
-    const order = await Order.findById(req.params.orderId);
+    const order = await Order.findById(orderId);
     if (!order)
       return res.status(404).json({ success: false, message: "Order not found" });
 
     order.status = "accepted";
-    order.assignedDriverId = driverId; // ✅ Assign driver
+    order.driverId = driverId; // ✅ properly assign driver
+    order.assignedAt = new Date();
 
     await order.save();
 
-    res.json({ success: true, message: "Order accepted and assigned to driver" });
+    res.json({ success: true, message: "Order approved and assigned to driver", order });
   } catch (err) {
-    console.error("Accept error:", err);
+    console.error("Approve error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -219,6 +220,27 @@ router.put("/admin/orders/update/:id", async (req, res) => {
   } catch (err) {
     console.error("Admin update status error:", err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ---------------------------------------------
+  ✅ DRIVER: GET ASSIGNED ORDERS
+---------------------------------------------- */
+router.get("/driver/:driverId", async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const orders = await Order.find({
+      driverId,
+      status: { $in: ["accepted", "delivering"] },
+    })
+      .populate("customerId", "fullName email")
+      .sort({ deliveryDate: 1 });
+
+    res.status(200).json({ success: true, orders });
+  } catch (err) {
+    console.error("Driver orders fetch error:", err);
+    res.status(500).json({ success: false, message: "Server error fetching driver orders" });
   }
 });
 

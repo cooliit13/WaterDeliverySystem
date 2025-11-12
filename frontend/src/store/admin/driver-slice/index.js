@@ -15,13 +15,25 @@ export const getAllDrivers = createAsyncThunk(
         return rejectWithValue("No token found");
       }
 
-      const response = await axios.get("http://localhost:5000/api/admin/drivers", {
+      const response = await axios.get("http://localhost:5000/api/driver/admin/drivers", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      return response.data;
+      // ✅ Debug: see exact payload shape returned by API
+      console.log("getAllDrivers response.data:", response.data);
+
+      // ✅ Normalize payload: accept either an array or an object { drivers: [...] }
+      const payload = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data.drivers)
+        ? response.data.drivers
+        : Array.isArray(response.data.data)
+        ? response.data.data
+        : [];
+
+      return payload;
     } catch (error) {
       console.error("❌ getAllDrivers error:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data?.message || "Failed to fetch drivers");
@@ -45,7 +57,7 @@ const driverSlice = createSlice({
       })
       .addCase(getAllDrivers.fulfilled, (state, action) => {
         state.loading = false;
-        state.drivers = action.payload;
+        state.drivers = action.payload; // payload is always an array now
       })
       .addCase(getAllDrivers.rejected, (state, action) => {
         state.loading = false;

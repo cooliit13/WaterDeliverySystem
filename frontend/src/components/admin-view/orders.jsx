@@ -44,17 +44,50 @@ function AdminOrdersView() {
     dispatch(getAllDrivers());
   }, [dispatch]);
 
+  // debug: log drivers shape when it changes
+  useEffect(() => {
+    console.log("Drivers (from redux) changed:", drivers);
+  }, [drivers]);
+
   useEffect(() => {
     if (orderDetails !== null) setOpenDetailsDialog(true);
   }, [orderDetails]);
 
-  // Approve and assign driver
+  // ✅ NEW: Preselect first driver for each order when drivers load
+  useEffect(() => {
+    if (!drivers || drivers.length === 0 || !orderList || orderList.length === 0) return;
+
+    setSelectedDrivers((prev) => {
+      const next = { ...prev };
+      orderList.forEach((order) => {
+        // if there's already a selection for this order, keep it
+        if (!next[order._id]) {
+          const firstDriver = drivers[0];
+          const id = firstDriver?._id ?? firstDriver?.id ?? "";
+          if (id) next[order._id] = id;
+        }
+      });
+      // debug selectedDrivers mapping
+      console.log("Preselected drivers map:", next);
+      return next;
+    });
+  }, [drivers, orderList]);
+
+  // Approve and assign driver — ✅ added Authorization header (only necessary change)
   async function handleApprove(orderId, driverId) {
     try {
-      await axios.put("http://localhost:5000/api/admin/orders/approve", {
-        orderId,
-        driverId,
-      });
+      const token = localStorage.getItem("token");
+      const res = await axios.put(
+        "http://localhost:5000/api/admin/orders/approve",
+        { orderId, driverId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log("Approve response:", res.data); // small debug
 
       dispatch(getAllOrdersForAdmin());
       alert("Order approved and driver assigned");
@@ -63,6 +96,9 @@ function AdminOrdersView() {
       alert("Failed to approve order");
     }
   }
+
+  // choose source drivers (could add local fallback if needed)
+  const sourceDrivers = Array.isArray(drivers) ? drivers : [];
 
   return (
     <Card>
@@ -109,7 +145,7 @@ function AdminOrdersView() {
 
                   <TableCell>₱{order.totalAmount}</TableCell>
 
-                  {/* ✅ FIXED DRIVER DROPDOWN */}
+                  {/* DRIVER DROPDOWN */}
                   <TableCell>
                     <select
                       value={selectedDrivers[order._id] || ""}
@@ -122,19 +158,30 @@ function AdminOrdersView() {
                       className="border p-2 rounded"
                     >
                       <option value="">Assign Driver</option>
-                      {drivers?.map((driver) => (
-                        <option key={driver._id} value={driver._id}>
-                          {driver.name}
-                        </option>
-                      ))}
+
+                      {sourceDrivers.map((driver) => {
+                        const id = driver._id ?? driver.id ?? "";
+                        const label =
+                          driver.name ?? driver.fullName ?? driver.email ?? "Driver";
+                        // skip any invalid
+                        if (!id) return null;
+                        return (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        );
+                      })}
                     </select>
 
                     <Button
                       className="ml-2"
                       onClick={() => {
-                        const driverId = selectedDrivers[order._id];
-                        if (!driverId)
-                          return alert("Select a driver first");
+                        const driverId = (selectedDrivers[order._id] || "").toString().trim();
+
+                        // debug
+                        console.log("Attempt approve:", { orderId: order._id, driverId });
+
+                        if (!driverId) return alert("Select a driver first");
 
                         handleApprove(order._id, driverId);
                       }}
