@@ -7,6 +7,7 @@ import {
   getAllDrivers,
   approveOrder
 } from "../controllers/adminController.js";
+import { createDriverAccount } from "../controllers/driverController.js"; // ✅ added
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import Order from "../models/order.js";
 
@@ -27,19 +28,13 @@ router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
 
 router.get("/customers", authMiddleware, adminOnly, getAllCustomers);
 router.get("/drivers", authMiddleware, adminOnly, getAllDrivers);
+router.post("/drivers", authMiddleware, adminOnly, createDriverAccount); // ✅ added
 router.put("/orders/approve", authMiddleware, approveOrder);
 
-
-// ==========================================
-// ✅ FIXED ORDER ROUTES (NECESSARY CHANGES ONLY)
-// ==========================================
-
-// ✅ Get all orders
-// ✅ Get all orders
 router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
   try {
     const orders = await Order.find()
-      .populate("customerId", "fullName email")   // ✅ FIXED HERE
+      .populate("customerId", "fullName email")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, orders });
@@ -53,7 +48,7 @@ router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
 router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate("customerId", "fullName email");   // ✅ FIXED HERE
+      .populate("customerId", "fullName email");
 
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
@@ -65,7 +60,6 @@ router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) =>
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 // ✅ Update order status
 router.put("/orders/update/:id", authMiddleware, adminOnly, async (req, res) => {

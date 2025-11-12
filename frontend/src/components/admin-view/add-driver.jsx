@@ -10,6 +10,8 @@ function AddDriver() {
     name: "",
     email: "",
     password: "",
+    contactNumber: "",       // ✅ added
+    vehicleNumber: "",       // ✅ added
   });
 
   const handleChange = (e) => {
@@ -18,7 +20,8 @@ function AddDriver() {
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.password) {
+    const { name, email, password, contactNumber, vehicleNumber } = form;
+    if (!name || !email || !password || !contactNumber || !vehicleNumber) {
       alert("Please fill in all fields!");
       return;
     }
@@ -26,7 +29,13 @@ function AddDriver() {
     const res = await dispatch(createDriverAccount(form));
     if (res?.payload?.success) {
       alert("✅ Driver created successfully!");
-      setForm({ name: "", email: "", password: "" });
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+        contactNumber: "",
+        vehicleNumber: "",
+      });
     } else {
       alert("❌ Failed to create driver account.");
     }
@@ -55,6 +64,20 @@ function AddDriver() {
           name="password"
           placeholder="Driver Password"
           value={form.password}
+          onChange={handleChange}
+        />
+        <Input
+          type="text"
+          name="contactNumber"
+          placeholder="Contact Number"
+          value={form.contactNumber}
+          onChange={handleChange}
+        />
+        <Input
+          type="text"
+          name="vehicleNumber"
+          placeholder="Vehicle Number"
+          value={form.vehicleNumber}
           onChange={handleChange}
         />
         <Button onClick={handleSubmit} className="w-full">

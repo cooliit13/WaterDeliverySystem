@@ -28,6 +28,11 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem("user");
     }
 
+    // ✅ Warn if request accidentally hits frontend port
+    if (error.config?.url?.startsWith("http://localhost:5173")) {
+      console.error("❌ Request misrouted to frontend dev server. Check baseURL or proxy config.");
+    }
+
     return Promise.reject(error);
   }
 );

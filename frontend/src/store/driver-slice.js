@@ -1,15 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axiosInstance from "@/utils/axiosInstance"; // ✅ added
 
 // Async action to create a driver account
 export const createDriverAccount = createAsyncThunk(
   "driver/createDriverAccount",
   async (driverData) => {
-    const response = await fetch("/api/drivers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(driverData),
-    });
-    return await response.json();
+    const response = await axiosInstance.post("/admin/drivers", driverData); // ✅ updated
+    return response.data; // ✅ updated
   }
 );
 

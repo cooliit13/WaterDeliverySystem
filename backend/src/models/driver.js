@@ -11,7 +11,11 @@ const driverSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    phone: {
+    contactNumber: {              // ✅ renamed from 'phone'
+      type: String,
+      required: true,
+    },
+    vehicleNumber: {              // ✅ added to match your form
       type: String,
       required: true,
     },
@@ -23,10 +27,6 @@ const driverSchema = new mongoose.Schema(
     vehicleType: {
       type: String,
       default: "motorcycle",
-    },
-    licenseNumber: {
-      type: String,
-      required: true,
     },
     address: {
       type: String,

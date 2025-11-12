@@ -8,7 +8,7 @@ import { checkAuth } from "@/store/auth-slice";
 import AdminLayout from "./components/admin-view/layout";
 import ShoppingLayout from "./components/shopping-view/layout";
 import DriverLayout from "./components/driver-view/layout";
-import AddDriver from "./components/admin-view/add-driver";
+import AddDriver from "./components/admin-view/add-driver"; // ✅ already imported
 
 // 📄 Auth Pages
 import AuthLogin from "./pages/auth/login";
@@ -26,7 +26,6 @@ import InventoryPage from "./pages/admin-view/InventoryPage";
 
 // 🚚 Driver Page
 import DriverDashboard from "./pages/driver-view/dashboard";
-
 
 // 🛍️ Shopping Pages
 import ShoppingHome from "./pages/shopping-view/home";
@@ -46,7 +45,6 @@ function App() {
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
 
-  // ✅ Only dispatch checkAuth if token exists
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -97,6 +95,7 @@ function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="features" element={<AdminFeatures />} />
           <Route path="inventory" element={<InventoryPage />} />
+          <Route path="add-driver" element={<AddDriver />} /> {/* ✅ Added route */}
         </Route>
 
         {/* 🚚 Driver Routes (Protected) */}

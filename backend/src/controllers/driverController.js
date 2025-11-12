@@ -3,6 +3,48 @@ import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
 import Order from "../models/order.js";   // ✅ REQUIRED
 
+// ✅ CREATE DRIVER ACCOUNT (admin-side)
+export const createDriverAccount = async (req, res) => {
+  try {
+    console.log("📥 Incoming driver data:", req.body);
+
+    const { name, email, password, contactNumber, vehicleNumber } = req.body;
+
+    if (!name || !email || !password || !contactNumber || !vehicleNumber) {
+      console.log("❌ Missing required fields");
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const existingDriver = await Driver.findOne({ email });
+    if (existingDriver) {
+      console.log("⚠️ Driver already exists:", email);
+      return res.status(400).json({ message: "Driver already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("🔐 Password hashed");
+
+    const newDriver = await Driver.create({
+      name,
+      email,
+      password: hashedPassword,
+      contactNumber,
+      vehicleNumber,
+    });
+
+    console.log("✅ Driver created:", newDriver._id);
+
+    res.status(201).json({
+      success: true,
+      message: "Driver account created successfully",
+      driver: newDriver,
+    });
+  } catch (error) {
+    console.error("🔥 Create driver error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ✅ REGISTER DRIVER
 export const registerDriver = async (req, res) => {
   try {
@@ -33,8 +75,6 @@ export const registerDriver = async (req, res) => {
   }
 };
 
-
-
 // ✅ LOGIN DRIVER
 export const loginDriver = async (req, res) => {
   try {
@@ -47,7 +87,7 @@ export const loginDriver = async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: "Invalid password" });
 
     const token = jwt.sign(
-      { id: driver._id, role: "driver" },   // ✅ FIXED (id, not userId)
+      { id: driver._id, role: "driver" },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -67,12 +107,10 @@ export const loginDriver = async (req, res) => {
   }
 };
 
-
-
 // ✅ GET DRIVER PROFILE
 export const getDriverProfile = async (req, res) => {
   try {
-    const driver = await Driver.findById(req.user.id).select("-password");   // ✅ FIXED
+    const driver = await Driver.findById(req.user.id).select("-password");
 
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
@@ -82,12 +120,10 @@ export const getDriverProfile = async (req, res) => {
   }
 };
 
-
-
 // ✅ UPDATE DRIVER PROFILE
 export const updateDriverProfile = async (req, res) => {
   try {
-    const driver = await Driver.findById(req.user.id);   // ✅ FIXED
+    const driver = await Driver.findById(req.user.id);
 
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
@@ -106,19 +142,15 @@ export const updateDriverProfile = async (req, res) => {
   }
 };
 
-
-
-
 // DRIVER GETS ASSIGNED & APPROVED ORDERS
 export const getAssignedOrders = async (req, res) => {
   try {
-    const driverId = req.user.id; // driver ID from JWT
+    const driverId = req.user.id;
 
-    // Fetch orders assigned to this driver with status "accepted" or "delivering"
     const orders = await Order.find({
       driverId: driverId,
       status: { $in: ["accepted", "delivering"] },
-    }).populate("customerId", "fullName phoneNumber email"); // include customer info
+    }).populate("customerId", "fullName phoneNumber email");
 
     res.json(orders);
   } catch (error) {
@@ -126,9 +158,6 @@ export const getAssignedOrders = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
 
 // ✅ UPDATE DELIVERY STATUS
 export const updateDeliveryStatus = async (req, res) => {
@@ -139,7 +168,7 @@ export const updateDeliveryStatus = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.driverId?.toString() !== req.user.id) {   // ✅ FIXED
+    if (order.driverId?.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -152,10 +181,7 @@ export const updateDeliveryStatus = async (req, res) => {
   }
 };
 
-
-
 // ✅ UPLOAD PROOF OF DELIVERY
-// ✅ UPLOAD PROOF OF DELIVERY (driverController.js)
 export const uploadProofOfDelivery = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -169,13 +195,12 @@ export const uploadProofOfDelivery = async (req, res) => {
     const order = await Order.findByIdAndUpdate(
       orderId,
       {
-        proofOfDelivery, // ✅ same name as in order.js
+        proofOfDelivery,
         status: "completed",
       },
       { new: true }
     );
 
-    // ✅ Make driver available again
     if (order.driverId) {
       await Driver.findByIdAndUpdate(order.driverId, { status: "available" });
     }
@@ -185,4 +210,3 @@ export const uploadProofOfDelivery = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
