@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   fullName: {
@@ -37,10 +37,19 @@ const userSchema = new mongoose.Schema({
     default: 'customer',
   },
 
-  // ✅ NEW: Profile image field
+  // ✅ Profile image field
   profileImage: {
     type: String,
     default: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+  },
+
+  // ✅ NEW: Google OAuth tokens for Calendar integration
+  googleTokens: {
+    access_token: String,
+    refresh_token: String,
+    scope: String,
+    token_type: String,
+    expiry_date: Number,
   },
 
 }, { timestamps: true });

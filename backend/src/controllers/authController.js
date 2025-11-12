@@ -6,8 +6,8 @@ import User from "../models/User.js";
 import { sendVerificationEmail } from "../utils/emailService.js";
 import { OAuth2Client } from "google-auth-library";
 
-// GOOGLE CLIENT
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// ✅ Use separate Google Login client (NOT your calendar one)
+const client = new OAuth2Client(process.env.GOOGLE_LOGIN_CLIENT_ID);
 
 // ✅ REGISTER USER (with verification)
 export const registerUser = async (req, res) => {
@@ -58,13 +58,14 @@ export const googleLogin = async (req, res) => {
       return res.status(400).json({ message: "Missing Google credential" });
     }
 
+    // ✅ Verify Google credential with correct login client
     const ticket = await client.verifyIdToken({
       idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: process.env.GOOGLE_LOGIN_CLIENT_ID, // make sure this matches your .env
     });
 
     const payload = ticket.getPayload();
-    const { email, name, picture } = payload;
+    const { sub: googleId, email, name, picture } = payload;
 
     if (!email) {
       return res.status(400).json({ message: "Google login failed — no email provided." });
@@ -73,6 +74,7 @@ export const googleLogin = async (req, res) => {
     let user = await User.findOne({ email });
     if (!user) {
       user = new User({
+        googleId,
         fullName: name,
         email,
         password: null,
@@ -109,7 +111,7 @@ export const googleLogin = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Google Login Error:", error);
+    console.error("🔥 Google Login Error:", error);
     res.status(500).json({ message: "Server error during Google login", error: error.message });
   }
 };

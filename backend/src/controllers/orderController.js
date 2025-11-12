@@ -1,111 +1,100 @@
 import Order from "../models/order.js";
+import { calendar } from "../utils/googleCalendar.js"; // ✅ Google Calendar integration
 
-// ✅ Request Purchase (Customer)
+/* ---------------------------------------------
+  CUSTOMER REQUEST PURCHASE
+---------------------------------------------- */
 export const requestPurchase = async (req, res) => {
+  console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
+
   try {
-    console.log("🔥 Incoming Request Body:", req.body);
+    const { userId, cartItems, totalAmount, addressInfo, deliveryDate } = req.body;
 
-    const {
-      userId,
-      cartItems,
-      totalAmount,
-      addressInfo,
-      deliveryDate // ✅ added
-    } = req.body;
-
-    if (!userId || !cartItems || !cartItems.length || !totalAmount) {
+    if ((!userId && !req.body.customerId) || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields"
+        message: "Missing required fields",
       });
     }
 
+    const formattedItems = cartItems.map((item) => ({
+      productName: item.productName || "Unknown Product",
+      quantity: item.quantity,
+      price: item.price,
+    }));
+
+    const formattedAddress = `
+${addressInfo.address}, 
+${addressInfo.city}, 
+${addressInfo.pincode}
+Phone: ${addressInfo.phone}
+Notes: ${addressInfo.notes || "None"}
+`.trim();
+
+    const customerId = req.body.customerId || userId;
+
     const newOrder = await Order.create({
-      customerId: userId,
-      items: cartItems.map((item) => ({
-        productName: item.productName || "Unknown Product",
-        quantity: item.quantity,
-        price: item.price
-      })),
+      customerId,
+      items: formattedItems,
       totalAmount,
+      deliveryAddress: formattedAddress,
       status: "pending",
       paymentStatus: "unpaid",
-      deliveryAddress: addressInfo?.address || "No address provided",
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : null // ✅ patched
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Purchase request successfully submitted",
-      order: newOrder
-    });
-
-  } catch (err) {
-    console.error("Request purchase error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error. Failed to submit purchase request."
-    });
-  }
-};
-
-// ✅ Get all pending orders (ADMIN)
-export const getPendingOrders = async (req, res) => {
-  try {
-    const orders = await Order.find({ status: "pending" });
-    res.json({ success: true, orders });
-  } catch (err) {
-    console.error("Pending order error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-// ✅ Accept order (ADMIN)
-export const acceptOrder = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.orderId);
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
-
-    order.status = "accepted";
-    await order.save();
-
-    res.json({ success: true, message: "Order accepted" });
-  } catch (err) {
-    console.error("Accept order error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-// ✅ Cancel order (ADMIN)
-export const cancelOrder = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.orderId);
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
-
-    order.status = "cancelled";
-    await order.save();
-
-    res.json({ success: true, message: "Order cancelled" });
-  } catch (err) {
-    console.error("Cancel order error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-// ✅ Get single order details (ADMIN)
-export const getOrderDetailsForAdmin = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id).populate("customerId");
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+    // ✅ Add Google Calendar event for delivery
+    if (deliveryDate) {
+      await calendar.events.insert({
+        calendarId: "primary",
+        resource: {
+          summary: "Water Delivery",
+          description: `Delivery for ${customerId}`,
+          start: { dateTime: deliveryDate },
+          end: { dateTime: deliveryDate },
+        },
+      });
     }
 
-    res.json({ success: true, order }); // ✅ includes deliveryDate
+    return res.status(201).json({
+      success: true,
+      message: "Purchase request successfully submitted",
+      order: newOrder,
+    });
   } catch (err) {
-    console.error("Get order details error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Request purchase error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error. Failed to submit purchase request.",
+    });
+  }
+};
+
+/* ---------------------------------------------
+  GET BOOKED DELIVERY DATES (for calendar)
+---------------------------------------------- */
+export const getBookedDeliveryDates = async (req, res) => {
+  try {
+    // ✅ Fetch only pending/approved deliveries (exclude canceled or completed)
+    const orders = await Order.find(
+      { status: { $in: ["pending", "approved", "processing"] } },
+      "deliveryDate -_id"
+    );
+
+    // Format dates to YYYY-MM-DD
+    const bookedDates = orders
+      .map((order) => {
+        if (order.deliveryDate) {
+          const date = new Date(order.deliveryDate);
+          return date.toISOString().split("T")[0];
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    res.status(200).json({ bookedDates });
+  } catch (error) {
+    console.error("Error fetching booked delivery dates:", error);
+    res.status(500).json({ message: "Failed to fetch booked delivery dates" });
   }
 };

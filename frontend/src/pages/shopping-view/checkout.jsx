@@ -8,8 +8,11 @@ import { requestPurchase } from "@/store/shop/order-slice";
 import { fetchCartItems } from "@/store/shop/cart-slice";
 import { fetchAllFilteredProducts } from "@/store/shop/products-slice";
 import { useToast } from "@/components/ui/use-toast";
-import DatePicker from "react-datepicker"; // ✅ added
-import "react-datepicker/dist/react-datepicker.css"; // ✅ added
+
+// ✅ added imports for calendar
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+import { format } from "date-fns";
 
 function ShoppingCheckout() {
   const dispatch = useDispatch();
@@ -18,10 +21,9 @@ function ShoppingCheckout() {
   const { cartItems } = useSelector((state) => state.shopCart);
   const { user } = useSelector((state) => state.auth);
   const { approvalURL } = useSelector((state) => state.shopOrder);
-  const { productList } = useSelector((state) => state.shopProducts);
 
   const [currentSelectedAddress, setCurrentSelectedAddress] = useState(null);
-  const [deliveryDate, setDeliveryDate] = useState(null); // ✅ added
+  const [deliveryDate, setDeliveryDate] = useState("");
 
   useEffect(() => {
     if (user?.id) {
@@ -46,9 +48,7 @@ function ShoppingCheckout() {
       ? cartItems.items.reduce((sum, item) => {
           const product = item?.productId;
           const price = Number(
-            product?.salePrice > 0
-              ? product?.salePrice
-              : product?.price || 0
+            product?.salePrice > 0 ? product?.salePrice : product?.price || 0
           );
           const quantity = Number(item?.quantity || 0);
           return sum + price * quantity;
@@ -57,35 +57,27 @@ function ShoppingCheckout() {
 
   const handleRequestPurchase = () => {
     if (!cartItems?.items?.length) {
-      toast({
-        title: "Cart is empty",
-        variant: "destructive",
-      });
-      return;
+      return toast({ title: "Cart is empty", variant: "destructive" });
     }
 
     if (!currentSelectedAddress) {
-      toast({
+      return toast({
         title: "Please select an address first",
         variant: "destructive",
       });
-      return;
     }
 
     if (!deliveryDate) {
-      toast({
+      return toast({
         title: "Please select a delivery date",
         variant: "destructive",
       });
-      return;
     }
 
     const formattedItems = cartItems.items.map((item) => {
       const product = item.productId;
       const price = Number(
-        product?.salePrice > 0
-          ? product.salePrice
-          : product?.price || 0
+        product?.salePrice > 0 ? product.salePrice : product?.price || 0
       );
       return {
         productId: product?._id,
@@ -99,7 +91,7 @@ function ShoppingCheckout() {
       userId: user?.id,
       cartItems: formattedItems,
       totalAmount: totalCartAmount,
-      deliveryDate: deliveryDate.toISOString(), // ✅ added
+      deliveryDate: new Date(deliveryDate).toISOString(),
       addressInfo: {
         addressId: currentSelectedAddress?._id,
         address: currentSelectedAddress?.address,
@@ -116,7 +108,7 @@ function ShoppingCheckout() {
         toast({ title: "Purchase request sent successfully!" });
       })
       .catch((err) => {
-        console.log("Request purchase error:", err);
+        console.error("Request purchase error:", err);
         toast({
           title: "Failed to send request",
           variant: "destructive",
@@ -131,10 +123,7 @@ function ShoppingCheckout() {
   return (
     <div className="flex flex-col">
       <div className="relative h-[300px] w-full overflow-hidden">
-        <img
-          src={img}
-          className="h-full w-full object-cover object-center"
-        />
+        <img src={img} className="h-full w-full object-cover object-center" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5 p-5">
@@ -158,23 +147,42 @@ function ShoppingCheckout() {
             </p>
           )}
 
+          {/* ✅ Modern calendar-style date picker */}
           <div className="mt-4">
-            <label className="block font-medium mb-2">Choose Delivery Date</label>
-            <DatePicker
-              selected={deliveryDate}
-              onChange={(date) => setDeliveryDate(date)}
-              minDate={new Date()}
-              placeholderText="Select a delivery date"
-              className="border px-3 py-2 rounded w-full"
-            />
+            <label className="block font-medium mb-2">
+              Choose Delivery Date
+            </label>
+            <div className="border rounded-lg p-3 bg-white shadow-sm">
+              <DayPicker
+                mode="single"
+                selected={deliveryDate ? new Date(deliveryDate) : undefined}
+                onSelect={(date) =>
+                  date && setDeliveryDate(format(date, "yyyy-MM-dd"))
+                }
+                fromDate={new Date()} // disable past dates
+                modifiersClassNames={{
+                  selected: "bg-blue-500 text-white rounded-full",
+                  today: "font-bold border border-blue-400",
+                }}
+                styles={{
+                  caption: { textAlign: "center", fontWeight: "bold" },
+                }}
+              />
+            </div>
+            {deliveryDate && (
+              <p className="text-sm text-gray-600 mt-2">
+                Selected:{" "}
+                <span className="font-semibold text-blue-600">
+                  {deliveryDate}
+                </span>
+              </p>
+            )}
           </div>
 
           <div className="mt-8 space-y-4">
             <div className="flex justify-between">
               <span className="font-bold">Total</span>
-              <span className="font-bold">
-                ₱{totalCartAmount.toFixed(2)}
-              </span>
+              <span className="font-bold">₱{totalCartAmount.toFixed(2)}</span>
             </div>
           </div>
 
