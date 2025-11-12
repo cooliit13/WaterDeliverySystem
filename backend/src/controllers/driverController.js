@@ -108,21 +108,25 @@ export const updateDriverProfile = async (req, res) => {
 
 
 
-// ✅ DRIVER GETS ASSIGNED & APPROVED ORDERS
+
+// DRIVER GETS ASSIGNED & APPROVED ORDERS
 export const getAssignedOrders = async (req, res) => {
   try {
-    const driverId = req.user.id;   // ✅ FIXED
+    const driverId = req.user.id; // driver ID from JWT
 
+    // Fetch orders assigned to this driver with status "accepted" or "delivering"
     const orders = await Order.find({
       driverId: driverId,
       status: { $in: ["accepted", "delivering"] },
-    }).populate("customerId", "fullName email phoneNumber");
+    }).populate("customerId", "fullName phoneNumber email"); // include customer info
 
     res.json(orders);
   } catch (error) {
+    console.error("Driver getAssignedOrders error:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
@@ -151,6 +155,7 @@ export const updateDeliveryStatus = async (req, res) => {
 
 
 // ✅ UPLOAD PROOF OF DELIVERY
+// ✅ UPLOAD PROOF OF DELIVERY (driverController.js)
 export const uploadProofOfDelivery = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -159,19 +164,25 @@ export const uploadProofOfDelivery = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const proofImage = "/uploads/proofs/" + req.file.filename;
+    const proofOfDelivery = "/uploads/proofs/" + req.file.filename;
 
     const order = await Order.findByIdAndUpdate(
       orderId,
       {
-        proofImage,
+        proofOfDelivery, // ✅ same name as in order.js
         status: "completed",
       },
       { new: true }
     );
+
+    // ✅ Make driver available again
+    if (order.driverId) {
+      await Driver.findByIdAndUpdate(order.driverId, { status: "available" });
+    }
 
     res.json({ message: "Proof uploaded successfully", order });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+

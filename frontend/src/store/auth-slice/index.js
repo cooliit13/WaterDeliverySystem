@@ -1,18 +1,35 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// ✅ Load saved user/token from localStorage on startup
-const storedUser = JSON.parse(localStorage.getItem("user"));
+/* -----------------------------------------------------------
+   ✅ Safe localStorage parsing (prevents "null"/invalid JSON)
+----------------------------------------------------------- */
+let storedUser = null;
+try {
+  const raw = localStorage.getItem("user");
+  storedUser = raw ? JSON.parse(raw) : null;
+} catch {
+  storedUser = null;
+}
+
 const storedToken = localStorage.getItem("token");
 
+/* -----------------------------------------------------------
+   ✅ Initial State
+   - Authenticated only if both user + token exist
+----------------------------------------------------------- */
 const initialState = {
-  isAuthenticated: !!storedUser,
+  isAuthenticated: !!(storedUser && storedToken),
   isLoading: false,
-  user: storedUser || null,
-  token: storedToken || null,
+  user: storedUser,
+  token: storedToken,
 };
 
-// ✅ Register
+/* -----------------------------------------------------------
+   ✅ Thunks
+----------------------------------------------------------- */
+
+// Register
 export const registerUser = createAsyncThunk("/auth/register", async (formData) => {
   const response = await axios.post("http://localhost:5000/api/auth/register", formData, {
     withCredentials: true,
@@ -20,7 +37,7 @@ export const registerUser = createAsyncThunk("/auth/register", async (formData) 
   return response.data;
 });
 
-// ✅ Normal login
+// Login
 export const loginUser = createAsyncThunk("/auth/login", async (formData) => {
   const response = await axios.post("http://localhost:5000/api/auth/login", formData, {
     withCredentials: true,
@@ -28,35 +45,48 @@ export const loginUser = createAsyncThunk("/auth/login", async (formData) => {
   return response.data;
 });
 
-// ✅ Logout
-export const logoutUser = createAsyncThunk("/auth/logout", async () => {
-  const response = await axios.post(
-    "http://localhost:5000/api/auth/logout",
-    {},
-    { withCredentials: true }
-  );
-  // ✅ Clear localStorage
-  localStorage.removeItem("user");
-  localStorage.removeItem("token");
-  return response.data;
+// Logout
+export const logoutUser = createAsyncThunk("/auth/logout", async (_, { dispatch }) => {
+  try {
+    // ✅ Clear local + session storage first
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // ✅ Reset Redux state
+    dispatch(clearUser());
+
+    // (Optional) Notify backend
+    await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
+  } catch (err) {
+    console.warn("Logout request failed:", err.message);
+  }
+
+  return { success: true };
 });
 
-// ✅ Check auth status (used for auto-login persistence)
+// Check Auth (auto-login persistence)
 export const checkAuth = createAsyncThunk("/auth/checkauth", async () => {
+  const token = localStorage.getItem("token");
+
   const response = await axios.get("http://localhost:5000/api/auth/check-auth", {
     withCredentials: true,
     headers: {
+      Authorization: `Bearer ${token}`,
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
     },
   });
+
   return response.data;
 });
 
+/* -----------------------------------------------------------
+   ✅ Slice Definition
+----------------------------------------------------------- */
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    // ✅ Manual setter (used after Google login)
+    // ✅ Manual setter (used after Google login or external auth)
     setUser: (state, action) => {
       const { user, token } = action.payload;
       state.user = user;
@@ -66,7 +96,7 @@ const authSlice = createSlice({
       localStorage.setItem("token", token);
     },
 
-    // ✅ Used when user closes tab or session expires
+    // ✅ Used on logout or session expiration
     clearUser: (state) => {
       state.user = null;
       state.token = null;
@@ -78,7 +108,7 @@ const authSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
-      // Register
+      /* -------------------- REGISTER -------------------- */
       .addCase(registerUser.pending, (state) => {
         state.isLoading = true;
       })
@@ -93,17 +123,19 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
       })
 
-      // Login
+      /* -------------------- LOGIN -------------------- */
       .addCase(loginUser.pending, (state) => {
         state.isLoading = true;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.isLoading = false;
         if (action.payload.success) {
-          state.user = action.payload.user;
+          const { user, token } = action.payload;
+          state.user = user;
+          state.token = token;
           state.isAuthenticated = true;
-          localStorage.setItem("user", JSON.stringify(action.payload.user));
-          localStorage.setItem("token", action.payload.token);
+          localStorage.setItem("user", JSON.stringify(user));
+          localStorage.setItem("token", token);
         }
       })
       .addCase(loginUser.rejected, (state) => {
@@ -112,7 +144,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
       })
 
-      // Check Auth (auto-login persistence)
+      /* -------------------- CHECK AUTH -------------------- */
       .addCase(checkAuth.pending, (state) => {
         state.isLoading = true;
       })
@@ -129,17 +161,23 @@ const authSlice = createSlice({
       .addCase(checkAuth.rejected, (state) => {
         state.isLoading = false;
         state.user = null;
+        state.token = null;
         state.isAuthenticated = false;
+        
       })
 
-      // Logout
+      /* -------------------- LOGOUT -------------------- */
       .addCase(logoutUser.fulfilled, (state) => {
         state.isLoading = false;
         state.user = null;
+        state.token = null;
         state.isAuthenticated = false;
       });
   },
 });
 
+/* -----------------------------------------------------------
+   ✅ Exports
+----------------------------------------------------------- */
 export const { setUser, clearUser } = authSlice.actions;
 export default authSlice.reducer;

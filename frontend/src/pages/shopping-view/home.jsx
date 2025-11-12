@@ -50,11 +50,13 @@ function ShoppingHome() {
   }, [productDetails]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prevSlide) => (prevSlide + 1) % featureImageList.length);
-    }, 4000);
+    if (Array.isArray(featureImageList) && featureImageList.length > 0) {
+      const timer = setInterval(() => {
+        setCurrentSlide((prevSlide) => (prevSlide + 1) % featureImageList.length);
+      }, 4000);
 
-    return () => clearInterval(timer);
+      return () => clearInterval(timer);
+    }
   }, [featureImageList]);
 
   useEffect(() => {
@@ -74,7 +76,7 @@ function ShoppingHome() {
     <div className="flex flex-col min-h-screen">
       {/* --- Banner Section --- */}
       <div className="relative w-full h-[600px] overflow-hidden">
-        {featureImageList && featureImageList.length > 0
+        {Array.isArray(featureImageList) && featureImageList.length > 0
           ? featureImageList.map((slide, index) => (
               <img
                 src={slide?.image}
@@ -90,9 +92,10 @@ function ShoppingHome() {
           variant="outline"
           size="icon"
           onClick={() =>
-            setCurrentSlide(
-              (prevSlide) =>
-                (prevSlide - 1 + featureImageList.length) % featureImageList.length
+            setCurrentSlide((prevSlide) =>
+              Array.isArray(featureImageList) && featureImageList.length > 0
+                ? (prevSlide - 1 + featureImageList.length) % featureImageList.length
+                : 0
             )
           }
           className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-white/80"
@@ -104,7 +107,11 @@ function ShoppingHome() {
           variant="outline"
           size="icon"
           onClick={() =>
-            setCurrentSlide((prevSlide) => (prevSlide + 1) % featureImageList.length)
+            setCurrentSlide((prevSlide) =>
+              Array.isArray(featureImageList) && featureImageList.length > 0
+                ? (prevSlide + 1) % featureImageList.length
+                : 0
+            )
           }
           className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-white/80"
         >

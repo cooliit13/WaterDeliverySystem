@@ -2,18 +2,29 @@ import React, { useState } from "react";
 import { AlignJustify, LogOut, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { logoutUser } from "@/store/auth-slice";
 
 function AdminHeader({ setOpen }) {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [showModal, setShowModal] = useState(false);
 
   const handleLogout = () => {
     setShowModal(true);
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setShowModal(false);
-    navigate("/auth/login"); // Redirect to login page
+    try {
+      await dispatch(logoutUser()).unwrap();
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/auth/login"; // ✅ Full redirect
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to logout. Try again.");
+    }
   };
 
   const cancelLogout = () => {

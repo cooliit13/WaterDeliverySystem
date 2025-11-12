@@ -10,18 +10,18 @@ export const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    // ✅ Verify token properly
+    // ✅ Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ Normalize ID for all token formats
-    // Supports: { id }, { userId }
+    // ✅ Normalize user object
     req.user = {
       ...decoded,
-      id: decoded.id || decoded.userId
+      id: decoded.id || decoded.userId,
+      role: decoded.role || null, // ✅ ensure role is present
     };
 
-    // ✅ Admin-only route protection (your existing logic)
-    if (req.baseUrl.includes("/api/admin") && decoded.role !== "admin") {
+    // ✅ Block non-admins from accessing /api/admin routes
+    if (req.baseUrl.includes("/api/admin") && req.user.role !== "admin") {
       return res.status(401).json({ message: "Access denied: Admins only" });
     }
 

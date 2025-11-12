@@ -6,9 +6,24 @@ export const getAllDrivers = createAsyncThunk(
   "adminDrivers/getAllDrivers",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get("http://localhost:5000/api/admin/drivers");
+      const token = localStorage.getItem("token");
+
+      // ✅ Log the token to verify it's present
+      console.log("🔐 Sending token:", token);
+
+      if (!token) {
+        return rejectWithValue("No token found");
+      }
+
+      const response = await axios.get("http://localhost:5000/api/admin/drivers", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       return response.data;
     } catch (error) {
+      console.error("❌ getAllDrivers error:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data?.message || "Failed to fetch drivers");
     }
   }
@@ -26,6 +41,7 @@ const driverSlice = createSlice({
     builder
       .addCase(getAllDrivers.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(getAllDrivers.fulfilled, (state, action) => {
         state.loading = false;

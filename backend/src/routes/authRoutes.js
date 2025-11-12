@@ -167,13 +167,25 @@ router.post("/google-login", googleLogin);
 /* ----------------------------------------------
    ✅ Logout
 ------------------------------------------------*/
+/* ----------------------------------------------
+   ✅ Logout (Fully clears session + client state)
+------------------------------------------------*/
 router.post("/logout", (req, res) => {
   try {
-    res.clearCookie("token");
+    // 🔥 Clear both token cookie (if any) AND disable caching
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    // Prevent browser from caching the dashboard page
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+
     return res.status(200).json({ success: true, message: "Logged out successfully" });
   } catch (error) {
     console.error("Logout Error:", error);
-    res.status(500).json({ success: false, message: "Logout failed" });
+    return res.status(500).json({ success: false, message: "Logout failed" });
   }
 });
 
@@ -231,15 +243,23 @@ router.get("/common/feature/get", async (req, res) => {
 /* ----------------------------------------------
    ✅ Check Auth (Fix for frontend 404)
 ------------------------------------------------*/
+/* ----------------------------------------------
+   ✅ Fixed Check Auth (Universal for all roles)
+------------------------------------------------*/
 router.get("/check-auth", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select("-password");
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // 🔥 Support both { id } and { userId } from token
+    const userId = req.user.id || req.user.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Invalid token" });
     }
 
-    res.status(200).json({
+    const user = await User.findById(userId).select("-password");
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
       success: true,
       user: {
         id: user._id,
@@ -250,9 +270,11 @@ router.get("/check-auth", authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: "Server Error" });
+    console.error("Check Auth Error:", error.message);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 /* ----------------------------------------------
    ✅ Check Auth (used by frontend auto-login)
 ------------------------------------------------*/

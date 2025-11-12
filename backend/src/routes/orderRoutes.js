@@ -88,16 +88,23 @@ router.get("/pending", async (req, res) => {
 /* ---------------------------------------------
   ADMIN: ACCEPT ORDER
 ---------------------------------------------- */
+/* ---------------------------------------------
+  ADMIN: ACCEPT ORDER
+---------------------------------------------- */
 router.put("/accept/:orderId", async (req, res) => {
   try {
+    const { driverId } = req.body; // ✅ Get driverId from request body
+
     const order = await Order.findById(req.params.orderId);
     if (!order)
       return res.status(404).json({ success: false, message: "Order not found" });
 
     order.status = "accepted";
+    order.assignedDriverId = driverId; // ✅ Assign driver
+
     await order.save();
 
-    res.json({ success: true, message: "Order accepted" });
+    res.json({ success: true, message: "Order accepted and assigned to driver" });
   } catch (err) {
     console.error("Accept error:", err);
     res.status(500).json({ success: false, message: "Server error" });
