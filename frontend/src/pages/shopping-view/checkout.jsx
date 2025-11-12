@@ -8,6 +8,8 @@ import { requestPurchase } from "@/store/shop/order-slice";
 import { fetchCartItems } from "@/store/shop/cart-slice";
 import { fetchAllFilteredProducts } from "@/store/shop/products-slice";
 import { useToast } from "@/components/ui/use-toast";
+import DatePicker from "react-datepicker"; // ✅ added
+import "react-datepicker/dist/react-datepicker.css"; // ✅ added
 
 function ShoppingCheckout() {
   const dispatch = useDispatch();
@@ -19,6 +21,7 @@ function ShoppingCheckout() {
   const { productList } = useSelector((state) => state.shopProducts);
 
   const [currentSelectedAddress, setCurrentSelectedAddress] = useState(null);
+  const [deliveryDate, setDeliveryDate] = useState(null); // ✅ added
 
   useEffect(() => {
     if (user?.id) {
@@ -38,25 +41,20 @@ function ShoppingCheckout() {
     }
   };
 
-  // ✅ FIXED: NaN-proof, safe pricing, works even if product object is partial
   const totalCartAmount =
     cartItems?.items?.length > 0
       ? cartItems.items.reduce((sum, item) => {
           const product = item?.productId;
-
           const price = Number(
             product?.salePrice > 0
               ? product?.salePrice
               : product?.price || 0
           );
-
           const quantity = Number(item?.quantity || 0);
-
           return sum + price * quantity;
         }, 0)
       : 0;
 
-  // ✅ Request purchase handler
   const handleRequestPurchase = () => {
     if (!cartItems?.items?.length) {
       toast({
@@ -74,19 +72,24 @@ function ShoppingCheckout() {
       return;
     }
 
-    // ✅ FIXED: Backend-friendly formatting
+    if (!deliveryDate) {
+      toast({
+        title: "Please select a delivery date",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const formattedItems = cartItems.items.map((item) => {
       const product = item.productId;
-
       const price = Number(
         product?.salePrice > 0
           ? product.salePrice
           : product?.price || 0
       );
-
       return {
         productId: product?._id,
-        productName: product?.title, // ✅ FIXED name
+        productName: product?.title,
         price,
         quantity: Number(item?.quantity || 0),
       };
@@ -96,6 +99,7 @@ function ShoppingCheckout() {
       userId: user?.id,
       cartItems: formattedItems,
       totalAmount: totalCartAmount,
+      deliveryDate: deliveryDate.toISOString(), // ✅ added
       addressInfo: {
         addressId: currentSelectedAddress?._id,
         address: currentSelectedAddress?.address,
@@ -153,6 +157,17 @@ function ShoppingCheckout() {
               Your cart is empty or still loading...
             </p>
           )}
+
+          <div className="mt-4">
+            <label className="block font-medium mb-2">Choose Delivery Date</label>
+            <DatePicker
+              selected={deliveryDate}
+              onChange={(date) => setDeliveryDate(date)}
+              minDate={new Date()}
+              placeholderText="Select a delivery date"
+              className="border px-3 py-2 rounded w-full"
+            />
+          </div>
 
           <div className="mt-8 space-y-4">
             <div className="flex justify-between">

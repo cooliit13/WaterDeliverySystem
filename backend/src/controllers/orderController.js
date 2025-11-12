@@ -1,5 +1,6 @@
 import Order from "../models/order.js";
 
+// ✅ Request Purchase (Customer)
 export const requestPurchase = async (req, res) => {
   try {
     console.log("🔥 Incoming Request Body:", req.body);
@@ -8,10 +9,10 @@ export const requestPurchase = async (req, res) => {
       userId,
       cartItems,
       totalAmount,
-      addressInfo
+      addressInfo,
+      deliveryDate // ✅ added
     } = req.body;
 
-    // ✅ Validate required fields
     if (!userId || !cartItems || !cartItems.length || !totalAmount) {
       return res.status(400).json({
         success: false,
@@ -30,7 +31,7 @@ export const requestPurchase = async (req, res) => {
       status: "pending",
       paymentStatus: "unpaid",
       deliveryAddress: addressInfo?.address || "No address provided",
-      deliveryDate: null
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : null // ✅ patched
     });
 
     res.status(201).json({
@@ -47,7 +48,6 @@ export const requestPurchase = async (req, res) => {
     });
   }
 };
-
 
 // ✅ Get all pending orders (ADMIN)
 export const getPendingOrders = async (req, res) => {
@@ -90,6 +90,22 @@ export const cancelOrder = async (req, res) => {
     res.json({ success: true, message: "Order cancelled" });
   } catch (err) {
     console.error("Cancel order error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ✅ Get single order details (ADMIN)
+export const getOrderDetailsForAdmin = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate("customerId");
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, order }); // ✅ includes deliveryDate
+  } catch (err) {
+    console.error("Get order details error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };

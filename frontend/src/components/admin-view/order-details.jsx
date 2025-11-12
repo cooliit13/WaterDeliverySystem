@@ -12,12 +12,12 @@ import {
 } from "@/store/admin/order-slice";
 import { useToast } from "../ui/use-toast";
 
-
 const initialFormData = {
   status: "",
 };
 
 function AdminOrderDetailsView({ orderDetails }) {
+  console.log("🧾 Raw deliveryDate:", orderDetails?.deliveryDate);
   const [formData, setFormData] = useState(initialFormData);
   const dispatch = useDispatch();
   const { toast } = useToast();
@@ -54,6 +54,15 @@ function AdminOrderDetailsView({ orderDetails }) {
           <div className="flex justify-between">
             <p className="font-medium">Order Date</p>
             <Label>{new Date(orderDetails?.createdAt).toLocaleDateString()}</Label>
+          </div>
+
+          <div className="flex justify-between">
+            <p className="font-medium">Delivery Date</p>
+            <Label>
+              {orderDetails?.deliveryDate
+                ? new Date(orderDetails.deliveryDate).toLocaleDateString()
+                : "Not scheduled"}
+            </Label>
           </div>
 
           <div className="flex justify-between">
@@ -118,13 +127,6 @@ function AdminOrderDetailsView({ orderDetails }) {
 
           <div className="grid gap-1 text-muted-foreground">
             <span>{orderDetails?.deliveryAddress}</span>
-
-            {orderDetails?.deliveryDate && (
-              <span>
-                Delivery Date:{" "}
-                {new Date(orderDetails.deliveryDate).toLocaleDateString()}
-              </span>
-            )}
           </div>
         </div>
 

@@ -72,7 +72,7 @@ export const updateOrderStatus = createAsyncThunk(
 
     const response = await axios.put(
       `http://localhost:5000/api/admin/orders/update/${id}`,
-      { orderStatus },         // ✅ FIXED
+      { orderStatus },
       {
         headers: { Authorization: `Bearer ${token}` }
       }
@@ -81,7 +81,6 @@ export const updateOrderStatus = createAsyncThunk(
     return response.data;
   }
 );
-
 
 const adminOrderSlice = createSlice({
   name: "adminOrderSlice",
@@ -98,6 +97,9 @@ const adminOrderSlice = createSlice({
       })
       .addCase(getOrderDetailsForAdmin.fulfilled, (state, action) => {
         state.orderDetails = action.payload.order;
+
+        // ✅ Debug: Confirm deliveryDate is present
+        console.log("🧾 Admin order details:", action.payload.order.deliveryDate);
       })
 
       /* ---------------------------------------------------------

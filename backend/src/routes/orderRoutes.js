@@ -8,12 +8,12 @@ const router = express.Router();
 ---------------------------------------------- */
 router.post("/request-purchase", async (req, res) => {
   console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
-  
+
   try {
-    const { userId, cartItems, totalAmount, addressInfo } = req.body;
+    const { userId, cartItems, totalAmount, addressInfo, deliveryDate } = req.body;
+
     console.log("Incoming order data:", req.body);
 
-    // Validate fields
     if (!userId && !req.body.customerId || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
       return res.status(400).json({
         success: false,
@@ -21,14 +21,12 @@ router.post("/request-purchase", async (req, res) => {
       });
     }
 
-    // Convert cartItems to DB format
     const formattedItems = cartItems.map((item) => ({
       productName: item.productName || "Unknown Product",
       quantity: item.quantity,
       price: item.price
     }));
 
-    // Convert address object to text
     const formattedAddress = `
 ${addressInfo.address}, 
 ${addressInfo.city}, 
@@ -37,10 +35,8 @@ Phone: ${addressInfo.phone}
 Notes: ${addressInfo.notes || "None"}
 `.trim();
 
-    // ✅ FIXED HERE
     const customerId = req.body.customerId || userId;
 
-    // Create order in DB
     const newOrder = await Order.create({
       customerId,
       items: formattedItems,
@@ -48,7 +44,7 @@ Notes: ${addressInfo.notes || "None"}
       deliveryAddress: formattedAddress,
       status: "pending",
       paymentStatus: "unpaid",
-      deliveryDate: null
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : null
     });
 
     return res.status(201).json({
@@ -85,9 +81,6 @@ router.get("/pending", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: ACCEPT ORDER
----------------------------------------------- */
 /* ---------------------------------------------
   ADMIN: ACCEPT ORDER
 ---------------------------------------------- */
@@ -167,6 +160,7 @@ router.get("/details/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 /* ---------------------------------------------
   ADMIN: GET ALL ORDERS
 ---------------------------------------------- */
@@ -194,7 +188,7 @@ router.get("/admin/orders/details/:id", async (req, res) => {
     if (!order)
       return res.status(404).json({ success: false, message: "Order not found" });
 
-    res.json({ success: true, order });
+    res.json({ success: true, order }); // ✅ includes deliveryDate
   } catch (err) {
     console.error("Admin details error:", err);
     res.status(500).json({ success: false, message: "Server error" });
