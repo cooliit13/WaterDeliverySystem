@@ -41,6 +41,10 @@ import UnauthPage from "./pages/unauth-page";
 // ✅ ProtectedRoute
 import ProtectedRoute from "./components/admin-view/ProtectedRoute";
 
+// 🏠 Landing Page
+import LandingPage from "./pages/landing-page/LandingPage";
+
+
 function App() {
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
@@ -69,7 +73,7 @@ function App() {
                 return <Navigate to="/shop/home" replace />;
               })()
             ) : (
-              <Navigate to="/auth/login" replace />
+              <LandingPage />
             )
           }
         />
