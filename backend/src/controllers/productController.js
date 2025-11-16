@@ -1,5 +1,5 @@
 // backend/src/controllers/ProductController.js
-import Product from "../models/Product.js"; // <-- make sure this import exists
+import Product from "../models/Product.js";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
 
@@ -50,7 +50,7 @@ export const getProducts = async (req, res) => {
 // Upload image controller
 export const uploadImage = async (req, res) => {
   try {
-    console.log("req.file:", req.file);
+    console.log("uploadImage called. req.file:", !!req.file);
 
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ success: false, message: "No file uploaded" });
@@ -71,26 +71,41 @@ export const uploadImage = async (req, res) => {
 // Admin: Create product
 export const createProduct = async (req, res) => {
   try {
+    console.log("createProduct called. req.file:", !!req.file, "req.body:", req.body);
+
     if (req.file && req.file.buffer) {
-      const uploadRes = await uploadBufferToCloudinary(req.file.buffer, { folder: "products" });
-      req.body.image = uploadRes.secure_url || uploadRes.url;
+      try {
+        const uploadRes = await uploadBufferToCloudinary(req.file.buffer, { folder: "products" });
+        req.body.image = uploadRes.secure_url || uploadRes.url;
+      } catch (uploadErr) {
+        // Minimal: don't let Cloudinary failure abort the entire request
+        console.error("Cloudinary upload failed in createProduct (continuing without image):", uploadErr);
+        req.body.image = req.body.image || null;
+      }
     }
 
-    const { title, description, price, averageReview, image } = req.body;
+    // Minimal mapping so Mongoose schema (which expects `name`) passes
+    if (req.body.title && !req.body.name) {
+      req.body.name = req.body.title;
+    }
 
-    if (!title || !price || !image) {
+    const { name, title, description, price, averageReview, image } = req.body;
+
+    // require name (mapped from title) and price
+    if (!name || !price) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: title, price, and image are required",
+        message: "Missing required fields: name (or title) and price are required",
       });
     }
 
     const newProduct = new Product({
-      title,
+      name,
+      title: title || name,
       description: description || "",
       price: Number(price),
       averageReview: averageReview ? Number(averageReview) : 0,
-      image,
+      image: image || null,
       createdBy: req.user?.userId || null,
     });
 
@@ -98,7 +113,7 @@ export const createProduct = async (req, res) => {
 
     return res.status(201).json({ success: true, product: newProduct });
   } catch (err) {
-    console.error("createProduct error:", err);
+    console.error("createProduct error (full):", err);
     return res.status(500).json({
       success: false,
       message: "Failed to create product",
@@ -111,15 +126,31 @@ export const createProduct = async (req, res) => {
 export const editProduct = async (req, res) => {
   try {
     const id = req.params.id;
-    const update = req.body;
+    console.log("editProduct called. id:", id, "hasFile:", !!req.file, "body:", req.body);
 
+    if (req.file && req.file.buffer) {
+      try {
+        const uploadRes = await uploadBufferToCloudinary(req.file.buffer, { folder: "products" });
+        req.body.image = uploadRes.secure_url || uploadRes.url;
+      } catch (uploadErr) {
+        console.error("Cloudinary upload failed in editProduct (continuing without new image):", uploadErr);
+        // continue — update other fields even if image upload fails
+      }
+    }
+
+    // Minimal mapping: if frontend sent title, copy to name so validation passes
+    if (req.body.title && !req.body.name) {
+      req.body.name = req.body.title;
+    }
+
+    const update = req.body;
     const updated = await Product.findByIdAndUpdate(id, update, { new: true });
     if (!updated) return res.status(404).json({ success: false, message: "Product not found" });
 
     return res.status(200).json({ success: true, product: updated });
   } catch (err) {
-    console.error("editProduct error:", err);
-    return res.status(500).json({ success: false, message: "Failed to edit product" });
+    console.error("editProduct error (full):", err);
+    return res.status(500).json({ success: false, message: "Failed to edit product", error: err.message || err });
   }
 };
 
@@ -133,7 +164,7 @@ export const deleteProduct = async (req, res) => {
     return res.status(200).json({ success: true, message: "Product deleted" });
   } catch (err) {
     console.error("deleteProduct error:", err);
-    return res.status(500).json({ success: false, message: "Failed to delete product" });
+    return res.status(500).json({ success: false, message: "Failed to delete product", error: err.message || err });
   }
 };
 

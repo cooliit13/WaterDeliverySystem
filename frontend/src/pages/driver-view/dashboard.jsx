@@ -1,3 +1,4 @@
+// frontend/src/pages/driver-view/dashboard.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,40 +43,102 @@ function DriverDashboard() {
   const fileInputRef = useRef(null);
   const currentOrderRef = useRef(null);
 
-  // ✅ Load driver orders
+  // REF: keep a ref to the active AbortController so logout can cancel inflight requests
+  const activeControllerRef = useRef(null);
+
+  // ✅ Load driver orders (cancellable)
   useEffect(() => {
-    fetchDriverOrders();
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+
+    (async () => {
+      await fetchDriverOrders({ signal: controller.signal });
+    })().catch((e) => {
+      if (e.name === "AbortError") return;
+      console.error("fetchDriverOrders error (unexpected):", e);
+    });
+
+    return () => {
+      try {
+        controller.abort();
+      } catch (e) {}
+      activeControllerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchDriverOrders = async () => {
+  const fetchDriverOrders = async ({ signal } = {}) => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        setDeliveries([]);
+        setNotification("");
+        return;
+      }
+
+      let createdController = null;
+      if (!signal) {
+        createdController = new AbortController();
+        signal = createdController.signal;
+        activeControllerRef.current = createdController;
+      }
 
       const res = await fetch("http://localhost:5000/api/driver/orders", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        signal,
       });
 
-      const payload = await res.json();
-      const orders = Array.isArray(payload)
-        ? payload
-        : payload.orders ?? payload.data ?? [];
-
-      setDeliveries(orders);
-
-      if (orders.length > 0) {
-        setNotification("New delivery assigned!");
-      } else {
-        setNotification("");
+      if (createdController) {
+        activeControllerRef.current = null;
       }
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        try {
+          window.dispatchEvent(new Event("authChanged"));
+        } catch (e) {}
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+
+      if (!res.ok) {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          const err = await res.json().catch(() => ({}));
+          console.error("Failed to fetch driver orders (json):", err);
+        } else {
+          const text = await res.text().catch(() => "");
+          console.error("Failed to fetch driver orders (text/html):", text.slice(0, 200));
+        }
+        return;
+      }
+
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        const text = await res.text().catch(() => "");
+        console.error("Expected JSON from /api/driver/orders but got:", text.slice(0, 200));
+        return;
+      }
+
+      const payload = await res.json();
+      const orders = Array.isArray(payload) ? payload : payload.orders ?? payload.data ?? [];
+      setDeliveries(orders);
+      setNotification(orders.length > 0 ? "New delivery assigned!" : "");
     } catch (error) {
+      if (error.name === "AbortError") {
+        return;
+      }
       console.log("Error fetching driver orders:", error);
     }
   };
 
   // ---- Geocode addresses using Nominatim (free) ----
-  // Minimal, polite use: cache results locally and only fetch if not cached.
   const geocodeAddress = async (address) => {
     if (!address) return null;
     if (coordsMap[address]) return coordsMap[address];
@@ -102,18 +165,15 @@ function DriverDashboard() {
     return null;
   };
 
-  // When deliveries change: first populate coordsMap from any deliveryLocation stored in DB,
-  // then geocode addresses that still have no coords.
+  // When deliveries change: seed coordsMap from DB coords, then geocode remaining
   useEffect(() => {
     if (!deliveries || deliveries.length === 0) return;
 
-    // 1) Seed coordsMap with deliveryLocation from each order if present
     setCoordsMap((prev) => {
       const next = { ...prev };
       deliveries.forEach((d) => {
         const address = d.deliveryAddress || d.address || "";
         if (d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng) {
-          // Use DB-provided coordinates immediately
           next[address] = {
             lat: d.deliveryLocation.lat,
             lng: d.deliveryLocation.lng,
@@ -123,16 +183,16 @@ function DriverDashboard() {
       return next;
     });
 
-    // 2) Geocode remaining addresses (that do not have coords yet)
     deliveries.forEach((d, idx) => {
       const address = d.deliveryAddress || d.address || "";
       if (!address) return;
-      // Only geocode if neither DB-provided coords nor cached coords exist
-      const hasCoords = (d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng) || coordsMap[address];
+      const hasCoords =
+        (d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng) ||
+        coordsMap[address];
       if (!hasCoords) {
         setTimeout(() => {
           geocodeAddress(address);
-        }, idx * 250); // 250ms spacing
+        }, idx * 250);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,8 +202,37 @@ function DriverDashboard() {
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/auth/login");
+        return;
+      }
 
-      await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
+      if (newStatus === "completed") {
+        const deliverRes = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/deliver`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        });
+
+        if (deliverRes.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
+          navigate("/auth/login", { replace: true });
+          return;
+        }
+
+        if (!deliverRes.ok) {
+          const err = await deliverRes.json().catch(() => ({}));
+          console.error("Deliver endpoint failed:", err);
+          return;
+        }
+      }
+
+      const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -152,7 +241,21 @@ function DriverDashboard() {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      fetchDriverOrders();
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("Status update failed:", body);
+        return;
+      }
+
+      await fetchDriverOrders();
     } catch (error) {
       console.log("Status update error:", error);
     }
@@ -169,7 +272,7 @@ function DriverDashboard() {
     try {
       const token = localStorage.getItem("token");
 
-      await fetch(`http://localhost:5000/api/driver/orders/${orderId}/proof`, {
+      const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/proof`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -177,7 +280,21 @@ function DriverDashboard() {
         body: formData,
       });
 
-      fetchDriverOrders(); // reload list
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("Upload proof failed:", body);
+        return;
+      }
+
+      await fetchDriverOrders();
     } catch (error) {
       console.log("Upload error:", error);
     }
@@ -185,13 +302,36 @@ function DriverDashboard() {
 
   const handleOpenFile = (orderId) => {
     currentOrderRef.current = orderId;
-    fileInputRef.current.click();
+    if (fileInputRef.current) fileInputRef.current.click();
   };
 
+  // REPLACED: handleLogout now aborts inflight fetch, clears UI, dispatches event, then navigates
   const handleLogout = () => {
+    // clear auth
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/auth/login");
+
+    // abort any inflight fetch
+    if (activeControllerRef.current) {
+      try {
+        activeControllerRef.current.abort();
+      } catch (e) {}
+      activeControllerRef.current = null;
+    }
+
+    // clear local UI state
+    setDeliveries([]);
+    setNotification("");
+
+    // Dispatch authChanged so ProtectedRoute re-evaluates quickly
+    try {
+      window.dispatchEvent(new Event("authChanged"));
+    } catch (e) {}
+
+    // tiny delay so event listeners run before navigation — prevents blink/stay
+    setTimeout(() => {
+      navigate("/auth/login", { replace: true });
+    }, 10);
   };
 
   // Map center: first available geocoded delivery or fallback coordinates
@@ -203,7 +343,6 @@ function DriverDashboard() {
       const c = coordsMap[addr];
       if (c) return c;
     }
-    // fallback: Manila center approximately
     return { lat: 14.5995, lng: 120.9842 };
   })();
 
@@ -360,7 +499,6 @@ function DriverDashboard() {
                   />
 
                   {deliveries.map((order) => {
-                    // Prefer DB-provided deliveryLocation
                     const dbCoords = order.deliveryLocation;
                     const addr = order.deliveryAddress || order.address || "";
 

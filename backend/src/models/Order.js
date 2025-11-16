@@ -1,5 +1,17 @@
-// models/order.js
+// models/Order.js
 import mongoose from "mongoose";
+
+const OrderItemSchema = new mongoose.Schema({
+  productId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Product",
+    required: false,
+  },
+  productName: { type: String, required: true },
+  quantity: { type: Number, required: true },         // ordered qty
+  deliveredQty: { type: Number, default: 0 },         // <-- NEW: how many already delivered
+  price: { type: Number, required: true },
+});
 
 const orderSchema = new mongoose.Schema(
   {
@@ -9,34 +21,21 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ✅ Driver reference fixed
+    // Driver reference
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // changed from "Driver"
+      ref: "User",
     },
 
-    // ✅ When admin assigns a driver
     assignedAt: {
       type: Date,
     },
 
-    // ✅ Proof of delivery file path
     proofOfDelivery: {
       type: String,
     },
 
-    items: [
-      {
-        productId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: false,
-        },
-        productName: { type: String, required: true },
-        quantity: { type: Number, required: true },
-        price: { type: Number, required: true },
-      },
-    ],
+    items: [OrderItemSchema], // use the sub-schema above
 
     totalAmount: {
       type: Number,
@@ -64,7 +63,7 @@ const orderSchema = new mongoose.Schema(
       type: Date,
     },
 
-    // ✅ NEW: store geocoded coordinates for faster mapping
+    // store geocoded coordinates for faster mapping
     deliveryLocation: {
       lat: { type: Number },
       lng: { type: Number },

@@ -1,5 +1,6 @@
 import express from "express";
 import Order from "../models/order.js";
+import { markOrderDelivered } from "../controllers/orderController.js"; // ✅ ADD THIS
 
 const router = express.Router();
 
@@ -21,11 +22,14 @@ router.post("/request-purchase", async (req, res) => {
       });
     }
 
-    const formattedItems = cartItems.map((item) => ({
-      productName: item.productName || "Unknown Product",
-      quantity: item.quantity,
-      price: item.price
-    }));
+   const formattedItems = cartItems.map((item) => ({
+  productId: item.productId,        // REQUIRED
+  productName: item.productName || "Unknown Product",
+  quantity: item.quantity,
+  price: item.price,
+  deliveredQty: 0                   // recommended
+}));
+
 
     const formattedAddress = `
 ${addressInfo.address}, 
@@ -82,7 +86,7 @@ router.get("/pending", async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ✅ ADMIN: APPROVE ORDER (assign driver)
+  ADMIN: APPROVE ORDER
 ---------------------------------------------- */
 router.put("/admin/orders/approve", async (req, res) => {
   try {
@@ -93,7 +97,7 @@ router.put("/admin/orders/approve", async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
 
     order.status = "accepted";
-    order.driverId = driverId; // ✅ properly assign driver
+    order.driverId = driverId;
     order.assignedAt = new Date();
 
     await order.save();
@@ -189,7 +193,7 @@ router.get("/admin/orders/details/:id", async (req, res) => {
     if (!order)
       return res.status(404).json({ success: false, message: "Order not found" });
 
-    res.json({ success: true, order }); // ✅ includes deliveryDate
+    res.json({ success: true, order });
   } catch (err) {
     console.error("Admin details error:", err);
     res.status(500).json({ success: false, message: "Server error" });
@@ -224,7 +228,7 @@ router.put("/admin/orders/update/:id", async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ✅ DRIVER: GET ASSIGNED ORDERS
+  DRIVER: GET ASSIGNED ORDERS
 ---------------------------------------------- */
 router.get("/driver/:driverId", async (req, res) => {
   try {
@@ -243,5 +247,10 @@ router.get("/driver/:driverId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error fetching driver orders" });
   }
 });
+
+/* ---------------------------------------------
+  ✅ DRIVER or ADMIN — MARK ORDER AS DELIVERED
+---------------------------------------------- */
+router.put("/:orderId/deliver", markOrderDelivered); // <-- ONLY ADDITION
 
 export default router;

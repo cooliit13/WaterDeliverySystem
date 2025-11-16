@@ -15,12 +15,10 @@ import addressRoutes from "./routes/addressRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
 import calendarRoutes from './routes/calendarRoutes.js';
-
-
-
-
-
-
+import deliveryRoutes from "./routes/deliveryRoutes.js";
+import posRoutes from "./routes/posRoutes.js";
+import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
+import productStockRoutes from "./routes/productStockRoutes.js";
 
 
 dotenv.config();
@@ -60,6 +58,10 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/driver", driverRoutes);
 app.use('/api/google', calendarRoutes);
 app.use("/api/calendar", calendarRoutes);
+app.use("/api/driver", deliveryRoutes);
+app.use("/api/admin/pos", posRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin/products", productStockRoutes);
 
 
 

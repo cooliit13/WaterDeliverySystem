@@ -15,6 +15,9 @@ const adminSidebarMenuItems = [
   { id: "products", label: "Products", path: "/admin/products", icon: <ShoppingBasket /> },
   { id: "orders", label: "Orders", path: "/admin/orders", icon: <BadgeCheck /> },
   { id: "add-driver", label: "Add Driver", path: "/admin/add-driver", icon: <UserPlus /> },
+
+  // ✅ ONLY NEW ITEM NEEDED
+  { id: "pos", label: "POS (Walk-In)", path: "/admin/pos", icon: <ShoppingBasket /> },
 ];
 
 function MenuItems({ setOpen }) {
@@ -61,17 +64,16 @@ export default function AdminSideBar({ open, setOpen }) {
 
       {/* Desktop Sidebar */}
       <aside className="hidden w-64 border-r bg-background p-6 lg:flex flex-col">
-  <div
-    onClick={() => navigate("/admin/dashboard")}
-    className="flex cursor-pointer items-center gap-2 mb-4"
-  >
-    <ChartNoAxesCombined size={30} />
-    <h1 className="text-2xl font-extrabold">Water Admin</h1>
-  </div>
+        <div
+          onClick={() => navigate("/admin/dashboard")}
+          className="flex cursor-pointer items-center gap-2 mb-4"
+        >
+          <ChartNoAxesCombined size={30} />
+          <h1 className="text-2xl font-extrabold">Water Admin</h1>
+        </div>
 
-  <MenuItems />
-</aside>
-
+        <MenuItems />
+      </aside>
     </Fragment>
   );
 }

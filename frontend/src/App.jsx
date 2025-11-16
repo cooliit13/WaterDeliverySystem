@@ -24,6 +24,9 @@ import AdminOrders from "./pages/admin-view/orders";
 import AdminFeatures from "./pages/admin-view/features";
 import InventoryPage from "./pages/admin-view/InventoryPage";
 
+// ✅ POS page (ONLY NEW IMPORT)
+import AdminPOS from "@/pages/admin-view/POS";
+
 // 🚚 Driver Page
 import DriverDashboard from "./pages/driver-view/dashboard";
 
@@ -43,7 +46,6 @@ import ProtectedRoute from "./components/admin-view/ProtectedRoute";
 
 // 🏠 Landing Page
 import LandingPage from "./pages/landing-page/LandingPage";
-
 
 function App() {
   const dispatch = useDispatch();
@@ -100,6 +102,9 @@ function App() {
           <Route path="features" element={<AdminFeatures />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="add-driver" element={<AddDriver />} /> {/* ✅ Added route */}
+
+          {/* ✅ ONLY NEW ROUTE ADDED: POS */}
+          <Route path="pos" element={<AdminPOS />} />
         </Route>
 
         {/* 🚚 Driver Routes (Protected) */}
