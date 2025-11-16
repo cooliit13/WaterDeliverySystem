@@ -2,7 +2,7 @@
 import mongoose from "mongoose";
 import Order from "../models/order.js";
 import Product from "../models/Product.js";
-import { calendar } from "../utils/googleCalendar.js";
+import { createEventForOrder } from "../utils/googleCalendar.js";
 import { geocodeAddress } from "../utils/geocode.js";
 
 /* ---------------------------------------------
@@ -183,21 +183,16 @@ Notes: ${addressInfo.notes || "None"}
       deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
     });
 
-    if (deliveryDate) {
-      try {
-        await calendar.events.insert({
-          calendarId: "primary",
-          resource: {
-            summary: "Water Delivery",
-            description: `Delivery for ${customerId}`,
-            start: { dateTime: deliveryDate },
-            end: { dateTime: deliveryDate },
-          },
-        });
-      } catch (calErr) {
-        console.error("Google Calendar insert error:", calErr);
-      }
-    }
+    // If you want events only when admin approves, keep this commented-out.
+    // (We intentionally do NOT create calendar events here; admin approval will create them.)
+    //
+    // if (deliveryDate) {
+    //   try {
+    //     await createEventForOrder(newOrder);
+    //   } catch (calErr) {
+    //     console.error("Google Calendar createEventForOrder error:", calErr);
+    //   }
+    // }
 
     return res.status(201).json({
       success: true,
@@ -260,8 +255,7 @@ export const getBookedDeliveryDates = async (req, res) => {
   }
 };
 
-//MarkOrederDelivered
-
+//MarkOrderDelivered
 export const markOrderDelivered = async (req, res) => {
   const { orderId } = req.params;
   const deliveredItems = Array.isArray(req.body?.items) ? req.body.items : null;
@@ -481,6 +475,53 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
+/* ---------------------------------------------
+  NEW: approveAndAssignDriver
+  - Called by admin when approving + assigning a driver.
+  - Sets driverId, status='accepted', saves order.
+  - Attempts to create Google Calendar event (non-fatal).
+----------------------------------------------*/
+export const approveAndAssignDriver = async (req, res) => {
+  try {
+    const { orderId, driverId } = req.body;
+    if (!orderId || !driverId) {
+      return res.status(400).json({ success: false, message: "orderId and driverId required" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(orderId) || !mongoose.Types.ObjectId.isValid(driverId)) {
+      return res.status(400).json({ success: false, message: "Invalid orderId or driverId" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // assign driver and accept order
+    order.driverId = driverId;
+    order.status = "accepted";
+    order.updatedAt = new Date();
+
+    await order.save();
+
+    // TRY to create calendar event — don't block approve flow if calendar fails
+    try {
+      console.log(`approveAndAssignDriver: order ${order._id} accepted — attempting to create calendar event`);
+      const event = await createEventForOrder(order);
+      if (event) {
+        console.log("approveAndAssignDriver: calendar event created:", { id: event.id, htmlLink: event.htmlLink });
+      } else {
+        console.log("approveAndAssignDriver: createEventForOrder returned null — no event created.");
+      }
+    } catch (calErr) {
+      console.error("approveAndAssignDriver: createEventForOrder error:", calErr);
+    }
+
+    // return updated order (lean simple)
+    return res.status(200).json({ message: "Order approved and assigned to driver", order });
+  } catch (err) {
+    console.error("approveAndAssignDriver error:", err);
+    return res.status(500).json({ success: false, message: "Failed to approve and assign driver", error: err.message || err });
+  }
+};
+
 export default {
   requestPurchase,
   getDriverOrders,
@@ -488,4 +529,5 @@ export default {
   markOrderDelivered,
   updateOrderStatus,
   processDelivery,
+  approveAndAssignDriver,
 };

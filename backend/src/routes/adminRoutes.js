@@ -5,11 +5,13 @@ import {
   deleteUser,
   getAllCustomers,
   getAllDrivers,
-  approveOrder
 } from "../controllers/adminController.js";
-import { createDriverAccount } from "../controllers/driverController.js"; // ✅ added
+import { createDriverAccount } from "../controllers/driverController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import Order from "../models/order.js";
+
+// new import -> approveAndAssignDriver
+import { approveAndAssignDriver } from "../controllers/orderController.js";
 
 const router = express.Router();
 
@@ -28,8 +30,10 @@ router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
 
 router.get("/customers", authMiddleware, adminOnly, getAllCustomers);
 router.get("/drivers", authMiddleware, adminOnly, getAllDrivers);
-router.post("/drivers", authMiddleware, adminOnly, createDriverAccount); // ✅ added
-router.put("/orders/approve", authMiddleware, approveOrder);
+router.post("/drivers", authMiddleware, adminOnly, createDriverAccount);
+
+// <-- use new approveAndAssignDriver here (keeps same route used by frontend)
+router.put("/orders/approve", authMiddleware, adminOnly, approveAndAssignDriver);
 
 router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
   try {
