@@ -16,7 +16,7 @@ import {
   deleteProduct,
   editProduct,
   fetchAllProducts,
-} from "@/store/admin/products-slice"; // <-- matches your slice file
+} from "@/store/admin/products-slice";
 import { Fragment, useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 
@@ -26,7 +26,7 @@ const initialFormData = {
   description: "",
   price: "",
   averageReview: 0,
-  existingImageUrl: null, // optional: keep existing image when editing
+  existingImageUrl: null,
 };
 
 function AdminProducts() {
@@ -43,19 +43,45 @@ function AdminProducts() {
   const isFormValid = () =>
     ["title", "description", "price"].every((key) => !!formData[key]);
 
-  // refresh helper
+  // refresh helper with minimal normalization + logging
   const refreshProducts = async () => {
     try {
       const action = await dispatch(fetchAllProducts());
+      console.log("fetchAllProducts action:", action);
+
+      let raw = null;
       if (action?.payload?.products) {
-        setProductList(action.payload.products);
+        raw = action.payload.products;
       } else if (Array.isArray(action.payload)) {
-        // some APIs return array directly
-        setProductList(action.payload);
+        raw = action.payload;
+      } else if (action?.payload) {
+        if (Array.isArray(action.payload.data)) raw = action.payload.data;
+        else if (Array.isArray(action.payload.results)) raw = action.payload.results;
+        else {
+          console.warn("fetchAllProducts returned unexpected payload:", action.payload);
+          raw = [];
+        }
       } else {
-        setProductList([]);
-        console.warn("fetchAllProducts returned unexpected payload:", action);
+        raw = [];
       }
+
+      const normalized = (raw || []).map((p) => {
+        const title = p.title ?? p.name ?? p.productName ?? "";
+        const imageUrl = p.imageUrl ?? p.image ?? (p.image?.url ? p.image.url : null);
+        return {
+          _id: p._id ?? p.id ?? null,
+          title,
+          description: p.description ?? p.desc ?? "",
+          price: p.price ?? p.amount ?? 0,
+          image: imageUrl,
+          imageUrl: imageUrl,
+          averageReview: p.averageReview ?? p.rating ?? 0,
+          __raw: p,
+        };
+      });
+
+      setProductList(normalized);
+      console.log("Normalized productList:", normalized);
     } catch (err) {
       console.error("Failed to fetch products:", err);
       setProductList([]);
@@ -80,26 +106,24 @@ function AdminProducts() {
       if (imageFile) {
         data.append("image", imageFile);
       } else if (formData.existingImageUrl) {
-        // optional: let backend know to keep existing image
         data.append("existingImageUrl", formData.existingImageUrl);
       }
 
       if (currentEditedId) {
-        // IMPORTANT: call editProduct using object signature that matches your slice:
-        await dispatch(editProduct({ id: currentEditedId, formData: data }));
+        const res = await dispatch(editProduct({ id: currentEditedId, formData: data }));
+        console.log("editProduct result:", res);
         toast({ title: "Product edited successfully" });
       } else {
-        await dispatch(addNewProduct(data));
+        const res = await dispatch(addNewProduct(data));
+        console.log("addNewProduct result:", res);
         toast({ title: "Product added successfully" });
       }
 
-      // reset form and state
       setFormData(initialFormData);
       setImageFile(null);
       setOpenCreateProductsDialog(false);
       setCurrentEditedId(null);
 
-      // refresh list
       await refreshProducts();
     } catch (err) {
       console.error("Error submitting product:", err);
@@ -113,7 +137,7 @@ function AdminProducts() {
 
   const handleDelete = async (id) => {
     try {
-      await dispatch(deleteProduct(id)); // dispatch returns a promise
+      await dispatch(deleteProduct(id));
       toast({ title: "Product deleted" });
       await refreshProducts();
     } catch (err) {
@@ -126,18 +150,17 @@ function AdminProducts() {
     }
   };
 
-  // Optional helper used if AdminProductTile doesn't populate the form itself.
-  // You can call this from a tile's Edit button instead of relying on the tile.
   const openEditDialogFor = (product) => {
     setFormData({
-      title: product.title || "",
-      description: product.description || "",
-      price: product.price || "",
+      image: null,
+      title: product.title ?? product.name ?? "",
+      description: product.description ?? "",
+      price: product.price ?? "",
       averageReview: product.averageReview ?? 0,
-      existingImageUrl: product.imageUrl || product.image || null,
+      existingImageUrl: product.image ?? product.imageUrl ?? null,
     });
     setCurrentEditedId(product._id);
-    setImageFile(null); // user must upload new file to change
+    setImageFile(null);
     setOpenCreateProductsDialog(true);
   };
 
@@ -165,10 +188,9 @@ function AdminProducts() {
               setFormData={setFormData}
               setOpenCreateProductsDialog={setOpenCreateProductsDialog}
               setCurrentEditedId={setCurrentEditedId}
-              // if the tile calls handleDelete with id: use this
               handleDelete={(id) => handleDelete(id)}
-              // also expose a quick-edit function in case the tile wants direct data
               openEditDialog={() => openEditDialogFor(product)}
+              isAdmin={true} // IMPORTANT: admin mode (shows Edit/Delete)
             />
           ))
         ) : (

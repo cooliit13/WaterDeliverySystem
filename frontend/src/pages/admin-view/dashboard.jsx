@@ -58,6 +58,13 @@ function AdminDashboard() {
   const [adminOrders, setAdminOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
+  // ======= Product map for resolving productId -> title =======
+  const [productMap, setProductMap] = useState({}); // id (string) -> title
+
+  // ======= Date filter state (NEW) =======
+  const [filterStart, setFilterStart] = useState(""); // yyyy-mm-dd
+  const [filterEnd, setFilterEnd] = useState(""); // yyyy-mm-dd
+
   const { toast } = useToast();
 
   // ======= Load feature images =======
@@ -282,9 +289,28 @@ function AdminDashboard() {
     setOrdersLoading(true);
     axios
       .get("http://localhost:5000/api/admin/orders/get", { headers })
-      .then((res) => {
+      .then(async (res) => {
         const orders = res.data?.orders ?? res.data ?? [];
         setAdminOrders(Array.isArray(orders) ? orders : []);
+
+        // ALSO fetch products to build a productId -> title map so dashboard can resolve names
+        // (only if we actually have orders)
+        try {
+          if (Array.isArray(orders) && orders.length > 0) {
+            const prodRes = await axios.get("http://localhost:5000/api/admin/products/get", { headers });
+            const products = prodRes.data?.products ?? prodRes.data ?? [];
+            const map = {};
+            (Array.isArray(products) ? products : []).forEach((p) => {
+              const id = p._id ?? p.id ?? null;
+              if (id) {
+                map[String(id)] = p.title ?? p.name ?? p.productName ?? "";
+              }
+            });
+            setProductMap(map);
+          }
+        } catch (prodErr) {
+          console.warn("Failed to fetch products for dashboard mapping", prodErr);
+        }
       })
       .catch((err) => {
         console.warn("Failed to fetch admin orders", err);
@@ -292,6 +318,81 @@ function AdminDashboard() {
       .finally(() => setOrdersLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ======= Date helper =======
+  const parseToDay = (v) => {
+    if (!v) return null;
+    // If v already a Date or ISO string
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return null;
+    // normalize to start of day
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  // ======= Filtered arrays based on date range (NEW) =======
+  const { filteredPosSales, filteredAdminOrders, filteredTotals } = useMemo(() => {
+    let start = filterStart ? parseToDay(filterStart) : null;
+    let end = filterEnd ? parseToDay(filterEnd) : null;
+    if (end) {
+      // include the whole day
+      end.setHours(23, 59, 59, 999);
+    }
+
+    const posByDate = (sale) => {
+      const created = sale.createdAt ? new Date(sale.createdAt) : sale.date ? new Date(sale.date) : null;
+      return created;
+    };
+
+    const orderRefDate = (o) => {
+      // prefer deliveryDate, then updatedAt, then createdAt
+      return new Date(o.deliveryDate || o.updatedAt || o.createdAt || null);
+    };
+
+    const posFiltered = posSales.filter((s) => {
+      const d = posByDate(s);
+      if (!d || !d.getTime()) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+
+    const ordersFiltered = adminOrders.filter((o) => {
+      const d = orderRefDate(o);
+      if (!d || !d.getTime()) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+
+    // compute totals
+    const posSum = posFiltered.reduce((s, sale) => {
+      const val = Number(sale.totals?.total ?? sale.total ?? 0) || 0;
+      return s + val;
+    }, 0);
+
+    // For deliveries we compute revenue from items (delivered qty if present)
+    const deliverySum = ordersFiltered.reduce((s, o) => {
+      // Use items revenue
+      const items = Array.isArray(o.items) ? o.items : [];
+      const revenue = items.reduce((acc, it) => {
+        const qty = Number(it.deliveredQty ?? it.quantity ?? it.qty ?? 0);
+        const price = Number(it.price ?? 0);
+        return acc + qty * price;
+      }, 0);
+      return s + revenue;
+    }, 0);
+
+    return {
+      filteredPosSales: posFiltered,
+      filteredAdminOrders: ordersFiltered,
+      filteredTotals: {
+        posSum,
+        deliverySum,
+        combined: posSum + deliverySum,
+      },
+    };
+  }, [posSales, adminOrders, filterStart, filterEnd, productMap]);
 
   // ======= Helper: start of week (Mon) given a date =======
   const getStartOfWeekMonday = (d) => {
@@ -435,6 +536,19 @@ function AdminDashboard() {
     return { totalPosCount, totalPosRevenue, salesTodayCount: salesToday.length, todayRevenue, salesToday };
   }, [posSales]);
 
+  // ======= Clear filter =======
+  function clearFilter() {
+    setFilterStart("");
+    setFilterEnd("");
+  }
+
+  // ======= Resolve helper for dashboard items =======
+  function resolveProductTitle(productId) {
+    if (!productId && productId !== 0) return null;
+    const key = String(productId);
+    return productMap[key] ?? null;
+  }
+
   return (
     <div className="p-6 space-y-10">
       {/* Dashboard top row: expenses + quick stats */}
@@ -463,9 +577,36 @@ function AdminDashboard() {
           <div className="mt-3 text-sm text-gray-600">
             <div>Total Walk-ins: <strong>{posSummary.totalPosCount}</strong></div>
             <div>Sales Today: <strong>{posSummary.salesTodayCount}</strong></div>
-            <div>Revenue Today: <strong>₱{posSummary.todayRevenue.toFixed(2)}</strong></div>
+            <div>Revenue Today: <strong>₱{posSummary.todayRevenue.toFixed(2)}</strong></div> 
             <div className="mt-2 text-xs text-gray-500">Total POS Revenue: ₱{posSummary.totalPosRevenue.toFixed(2)}</div>
           </div>
+        </div>
+      </div>
+
+      {/* Date range filter UI */}
+      <div className="bg-white p-4 rounded-lg shadow-md border">
+        <h3 className="text-lg font-semibold mb-3">Filter Sales by Date Range</h3>
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div>
+            <label className="text-sm block mb-1">Start date</label>
+            <input type="date" value={filterStart} onChange={(e) => setFilterStart(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+
+          <div>
+            <label className="text-sm block mb-1">End date</label>
+            <input type="date" value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+
+          <div className="mt-4 md:mt-0 flex gap-2 ml-auto">
+            <Button onClick={clearFilter} variant="outline">Clear</Button>
+          </div>
+        </div>
+
+        {/* Filter summary */}
+        <div className="mt-3 text-sm text-gray-600">
+          <div>POS Total (filtered): <strong>₱{filteredTotals.posSum.toFixed(2)}</strong></div>
+          <div>Delivery Total (filtered): <strong>₱{filteredTotals.deliverySum.toFixed(2)}</strong></div>
+          <div className="font-bold mt-1">Combined (filtered): <strong>₱{filteredTotals.combined.toFixed(2)}</strong></div>
         </div>
       </div>
 
@@ -504,23 +645,23 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Walk-in Sales list */}
+      {/* Recent Walk-in Sales list (filtered view) */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">Recent Walk-in Sales</h2>
-          <div className="text-sm text-gray-500">{posLoading ? "Loading…" : `${posSales.length} total`}</div>
+          <h2 className="text-xl font-semibold">Recent Walk-in Sales (Filtered)</h2>
+          <div className="text-sm text-gray-500">{posLoading ? "Loading…" : `${filteredPosSales.length} shown`}</div>
         </div>
 
-        {posSales.length === 0 ? (
-          <p className="text-gray-500">No walk-in sales yet.</p>
+        {filteredPosSales.length === 0 ? (
+          <p className="text-gray-500">No walk-in sales in this range.</p>
         ) : (
           <ul className="space-y-3">
-            {posSales.slice(0, 10).map((sale) => (
+            {filteredPosSales.slice(0, 50).map((sale) => (
               <li key={sale._id || sale.id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
                 <div className="flex-1">
                   <div className="text-sm text-gray-600 mb-1">
                     <strong>{sale.customer?.name || sale.customer?.customerName || "Walk-in Customer"}</strong>
-                    <span className="ml-3 text-xs text-gray-400">{new Date(sale.createdAt || Date.now()).toLocaleString()}</span>
+                    <span className="ml-3 text-xs text-gray-400">{new Date(sale.createdAt || sale.date || Date.now()).toLocaleString()}</span>
                   </div>
 
                   <div className="text-sm text-gray-700">
@@ -535,6 +676,67 @@ function AdminDashboard() {
               </li>
             ))}
           </ul>
+        )}
+      </div>
+
+      {/* Recent Delivery Orders (filtered) */}
+      <div className="bg-white p-5 rounded-lg shadow-md border">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold">Delivery Orders (Filtered)</h2>
+          <div className="text-sm text-gray-500">{ordersLoading ? "Loading…" : `${filteredAdminOrders.length} shown`}</div>
+        </div>
+
+        {filteredAdminOrders.length === 0 ? (
+          <p className="text-gray-500">No delivery orders in this range.</p>
+        ) : (
+          // <-- SCROLLABLE container applied ONLY to Delivery Orders list
+          <div className="max-h-[320px] overflow-auto pr-2">
+            <ul className="space-y-3">
+              {filteredAdminOrders.slice(0, 50).map((order) => (
+                <li key={order._id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-600 mb-1">
+                      <strong>{order.customerId?.fullName || "Customer"}</strong>
+                      <span className="ml-3 text-xs text-gray-400">
+                        {new Date(order.deliveryDate || order.updatedAt || order.createdAt || Date.now()).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Items: vertical list, resolve productId -> title using productMap */}
+                    <div className="text-sm text-gray-700">
+                      {Array.isArray(order.items) && order.items.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {order.items.map((it, i) => {
+                            // resolve title: try productId then fallback to embedded fields
+                            const prodId = it.productId ?? (typeof it.product === "string" ? it.product : it.product?._id ?? null);
+                            const titleFromMap = prodId ? resolveProductTitle(prodId) : null;
+                            const embedded = it.productName ?? it.name ?? it.title ?? (it.product && (it.product.title ?? it.product.name)) ?? null;
+                            const displayName = titleFromMap || embedded || `productId:${prodId ?? "?"}`;
+                            const qty = it.quantity ?? it.qty ?? 0;
+                            return (
+                              <div key={i} className="truncate">
+                                {displayName} ×{qty}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        ""
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="ml-4 text-right">
+                    {/* compute order revenue quickly */}
+                    <div className="font-semibold">
+                      ₱{(Array.isArray(order.items) ? order.items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.quantity ?? it.qty ?? 0)), 0) : 0).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-gray-500">{order.status}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -683,9 +885,42 @@ function AdminDashboard() {
         )}
       </div>
 
-      
+      {/* FEATURE IMAGE UPLOAD */}
+      <div>
+        <ProductImageUpload
+          imageFile={imageFile}
+          setImageFile={setImageFile}
+          uploadedImageUrl={uploadedImageUrl}
+          setUploadedImageUrl={setUploadedImageUrl}
+          setImageLoadingState={setImageLoadingState}
+          imageLoadingState={imageLoadingState}
+          isCustomStyling={true}
+        />
+        <Button onClick={handleUploadFeatureImage} className="mt-5 w-full">
+          Upload
+        </Button>
+
+        <div className="flex flex-col gap-4 mt-5">
+          {featureImageList?.length > 0 ? (
+            featureImageList.map((img) => (
+              <div key={img._id} className="relative group">
+                <img src={img.image} className="w-full h-[300px] object-cover rounded-lg" />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"
+                  onClick={() => handleDeleteImage(img._id)}
+                >
+                  Delete
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-center">No feature images uploaded yet.</p>
+          )}
+        </div>
       </div>
-    
+    </div>
   );
 }
 
