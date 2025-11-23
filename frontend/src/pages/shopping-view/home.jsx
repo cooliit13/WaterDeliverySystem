@@ -118,6 +118,9 @@ function ShoppingHome() {
 
   // Get details — remote if real product otherwise local slide details
   function handleGetProductDetails(getCurrentProductId) {
+    // open dialog right away so user sees loading or local details
+    setOpenDetailsDialog(true);
+
     // try find real product
     const found = Array.isArray(productList) ? productList.find((p) => p._id === getCurrentProductId) : null;
     if (found) {
@@ -158,27 +161,23 @@ function ShoppingHome() {
               <div className="absolute inset-0 bg-white/30 backdrop-blur-sm pointer-events-none" />
 
               {/* interactive content */}
-              <div className="relative z-10 h-full flex items-center pointer-events-auto">
+              <div className="relative z-30 h-full flex items-center pointer-events-auto">
                 <div className="container mx-auto px-6 lg:px-12 flex flex-col lg:flex-row items-center justify-between gap-6 max-w-7xl">
                   <div className="w-full lg:w-2/3">
                     <div className="inline-block bg-white/80 text-blue-600 px-3 py-1 rounded-full text-sm font-semibold shadow border border-white/50">Acqua Amore Water Delivery</div>
                     <h1 className="mt-4 text-5xl lg:text-6xl font-extrabold text-blue-900 leading-tight">{slide.title}</h1>
                     <p className="mt-4 text-lg text-slate-700 max-w-2xl">{slide.leftDesc}</p>
-                    <div className="mt-6 flex gap-3">
-                      <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold" onClick={() => handleGetProductDetails(slide.id)}>Details</Button>
-                    </div>
+                   
                   </div>
 
                   <div className="w-full lg:w-1/3">
-                    <div className="rounded-2xl bg-white/50 backdrop-blur-sm p-4 shadow-2xl border border-white/20">
+                    <div className="rounded-2xl bg-white/50 backdrop-blur-sm p-4 shadow-2xl border border-white/20 z-40 pointer-events-auto relative">
                       <img src={slide.image} alt={slide.title} className="w-full h-44 object-cover rounded-xl shadow-md pointer-events-none" />
                       <div className="mt-3">
                         <h3 className="text-lg font-semibold text-blue-800">{slide.title}</h3>
                         <p className="text-sm text-slate-700 mt-1">{slide.desc}</p>
                         {slide.price ? <div className="mt-2 text-blue-600 font-bold">{`₱${slide.price}`}</div> : <div className="mt-2 text-sm text-slate-700">From ₱XX — Order Now</div>}
-                        <div className="mt-4 flex gap-2">
-                          <Button size="sm" onClick={() => handleGetProductDetails(slide.id)}>Details</Button>
-                        </div>
+                        
                       </div>
                     </div>
                   </div>
@@ -215,21 +214,6 @@ function ShoppingHome() {
                       product={productItem}
                       handleAddtoCart={handleAddtoCart}
                     />
-
-                    {/* name/label */}
-                    <div className="mt-2 text-sm font-semibold text-slate-700">
-                      {productItem.name || productItem.title || productItem.category || productItem.type || "Water"}
-                    </div>
-
-                    {/* description (short) */}
-                    <div className="mt-1 text-xs text-gray-500 text-center max-w-[220px]">
-                      {productItem.shortDescription || (productItem.description ? productItem.description.slice(0, 100) + (productItem.description.length > 100 ? "..." : "") : "Premium water — clean, safe, and refreshing.")}
-                    </div>
-
-                    {/* price */}
-                    <div className="mt-2 text-sm text-blue-600 font-bold">
-                      {productItem.price ? `₱${productItem.price}` : "From ₱XX"}
-                    </div>
                   </div>
                 ))
               : null}

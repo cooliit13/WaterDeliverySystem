@@ -99,16 +99,25 @@ function AdminProductTile({
     );
   }
 
-  // Customer mode: use your original ShoppingProductTile markup & callbacks exactly
+  // ----------------------------
+  // Customer mode (updated: only name + price)
+  // ----------------------------
   return (
-    <Card className="w-full max-w-sm mx-auto">
-      {/* keep the click area for details exactly as before */}
-      <div onClick={() => typeof handleGetProductDetails === "function" && handleGetProductDetails(product?._id)}>
+    <Card className="w-full max-w-sm mx-auto rounded-lg overflow-hidden shadow-sm flex flex-col">
+      {/* CLICKABLE TOP SECTION */}
+      <div
+        onClick={() =>
+          typeof handleGetProductDetails === "function" &&
+          handleGetProductDetails(product?._id)
+        }
+        className="cursor-pointer flex flex-col flex-grow"
+      >
+        {/* IMAGE */}
         <div className="relative">
           <img
             src={product?.image}
-            alt={product?.title}
-            className="w-full h-[300px] object-cover rounded-t-lg"
+            alt={product?.title ?? product?.name}
+            className="w-full h-[300px] object-cover"
           />
           {product?.totalStock === 0 ? (
             <Badge className="absolute top-2 left-2 bg-red-500 hover:bg-red-600">
@@ -125,42 +134,48 @@ function AdminProductTile({
           ) : null}
         </div>
 
-        <CardContent className="p-4">
-          <h2 className="text-xl font-bold mb-2">{product?.title}</h2>
+        {/* TEXT CONTENT AREA (name + price only) */}
+        <CardContent className="p-4 flex flex-col">
+          {/* NAME – centered */}
+          <h2 className="text-lg font-semibold text-slate-800 text-center mb-2">
+            {product?.title ?? product?.name ?? "Water"}
+          </h2>
 
-          <div className="flex justify-between items-center mb-2">
-            <span
-              className={`${
-                product?.salePrice > 0 ? "line-through" : ""
-              } text-lg font-semibold text-primary`}
-            >
-              ₱{product?.price}
-            </span>
+          {/* PRICE – centered and placed at bottom of content area */}
+          <div className="text-center mt-auto">
             {product?.salePrice > 0 ? (
-              <span className="text-lg font-semibold text-primary">
-                ₱{product?.salePrice}
-              </span>
-            ) : null}
+              <div className="flex items-baseline justify-center gap-3">
+                <span className="text-sm line-through text-gray-400">
+                  ₱{product?.price}
+                </span>
+                <span className="text-lg font-bold text-blue-700">
+                  ₱{product?.salePrice}
+                </span>
+              </div>
+            ) : (
+              <div className="text-lg font-bold text-blue-700">
+                ₱{product?.price ?? "0.00"}
+              </div>
+            )}
           </div>
         </CardContent>
       </div>
 
-      <CardFooter>
+      {/* FOOTER: ADD TO CART BUTTON */}
+      <CardFooter className="px-4 pb-4">
         {product?.totalStock === 0 ? (
           <Button className="w-full opacity-60 cursor-not-allowed">
             Out Of Stock
           </Button>
         ) : (
-          // IMPORTANT: call original callback signature so existing code works
           <Button
             onClick={(e) => {
-              // stop propagation so parent click (view details) doesn't trigger
               e.stopPropagation();
               if (typeof handleAddtoCart === "function") {
                 handleAddtoCart(product?._id, product?.totalStock);
               }
             }}
-            className="w-full"
+            className="w-full bg-slate-900 text-white hover:bg-slate-800"
           >
             Add to cart
           </Button>

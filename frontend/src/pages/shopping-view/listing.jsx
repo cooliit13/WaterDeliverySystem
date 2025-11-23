@@ -40,7 +40,6 @@ function ShoppingListing() {
     dispatch(fetchProductDetails(getCurrentProductId));
   }
 
-  // ✅ FIXED VERSION (minimal change: use res.error instead of success flag)
   function handleAddtoCart(getCurrentProductId, getTotalStock) {
     try {
       if (!user || !user.id) {
@@ -52,8 +51,6 @@ function ShoppingListing() {
       }
 
       const getCartItems = cartItems?.items || [];
-
-      // Check stock for existing item
       const existingItem = getCartItems.find(
         (item) => item.productId === getCurrentProductId
       );
@@ -71,8 +68,6 @@ function ShoppingListing() {
           quantity: 1,
         })
       ).then((res) => {
-
-        // ✅ NEW: Check if thunk succeeded
         if (!res.error) {
           dispatch(fetchCartItems());
           toast({
@@ -95,10 +90,6 @@ function ShoppingListing() {
   }
 
   useEffect(() => {
-    console.log("🧠 User from Redux:", user);
-  }, [user]);
-
-  useEffect(() => {
     setSort("price-lowtohigh");
   }, []);
 
@@ -110,6 +101,21 @@ function ShoppingListing() {
   useEffect(() => {
     if (productDetails !== null) setOpenDetailsDialog(true);
   }, [productDetails]);
+
+  // Detect stock from backend fields
+  function detectStock(product) {
+    if (!product) return null;
+    const raw =
+      product?.totalStock ??
+      product?.stock ??
+      product?.quantityAvailable ??
+      product?.quantity ??
+      product?.available ??
+      product?.inventoryCount ??
+      product?.stockCount;
+
+    return typeof raw !== "undefined" && raw !== null ? Number(raw) : null;
+  }
 
   return (
     <div className="p-4 md:p-6">
@@ -146,19 +152,42 @@ function ShoppingListing() {
             </DropdownMenu>
           </div>
         </div>
+
+        {/* PRODUCT GRID */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
           {productList && productList.length > 0
-            ? productList.map((productItem) => (
-                <ShoppingProductTile
-                  key={productItem._id}
-                  handleGetProductDetails={handleGetProductDetails}
-                  product={productItem}
-                  handleAddtoCart={handleAddtoCart}
-                />
-              ))
+            ? productList.map((productItem) => {
+                const totalStock = detectStock(productItem);
+
+                return (
+                  <div key={productItem._id} className="flex flex-col">
+                    <ShoppingProductTile
+                      handleGetProductDetails={handleGetProductDetails}
+                      product={productItem}
+                      handleAddtoCart={handleAddtoCart}
+                    />
+
+                    {/* ⭐ PERFECT CENTERED STOCK LABEL ⭐ */}
+                    <div className="w-full flex justify-center mt-2 text-sm text-muted-foreground">
+                      {totalStock === null ? (
+                        <span>Available: —</span>
+                      ) : totalStock > 0 ? (
+                        <span className="text-green-600">
+                          Available: {totalStock} pcs
+                        </span>
+                      ) : (
+                        <span className="text-red-500 font-bold">
+                          OUT OF STOCK
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             : null}
         </div>
       </div>
+
       <ProductDetailsDialog
         open={openDetailsDialog}
         setOpen={setOpenDetailsDialog}

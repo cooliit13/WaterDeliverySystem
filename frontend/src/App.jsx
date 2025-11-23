@@ -1,3 +1,4 @@
+// App.jsx
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Route, Routes, Navigate } from "react-router-dom";
@@ -9,6 +10,8 @@ import AdminLayout from "./components/admin-view/layout";
 import ShoppingLayout from "./components/shopping-view/layout";
 import DriverLayout from "./components/driver-view/layout";
 import AddDriver from "./components/admin-view/add-driver"; // ✅ already imported
+import ShoppingOrderTrack from "@/components/shopping-view/order-track";
+import ShoppingOrders from "@/components/shopping-view/orders"; // <-- ADDED import
 
 // 📄 Auth Pages
 import AuthLogin from "./pages/auth/login";
@@ -36,6 +39,9 @@ import ShoppingListing from "./pages/shopping-view/listing";
 import ShoppingCheckout from "./pages/shopping-view/checkout";
 import ShoppingAccount from "./pages/shopping-view/account";
 import SearchProducts from "./pages/shopping-view/search";
+
+// NEW: Admin Ratings page
+import AdminRatings from "@/components/admin-view/AdminRatings";
 
 // 🚫 Other Pages
 import NotFound from "./pages/not-found";
@@ -101,10 +107,11 @@ function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="features" element={<AdminFeatures />} />
           <Route path="inventory" element={<InventoryPage />} />
-          <Route path="add-driver" element={<AddDriver />} /> {/* ✅ Added route */}
-
-          {/* ✅ ONLY NEW ROUTE ADDED: POS */}
+          <Route path="add-driver" element={<AddDriver />} />
           <Route path="pos" element={<AdminPOS />} />
+
+          {/* <-- NEW Admin Ratings Route */}
+          <Route path="ratings" element={<AdminRatings />} />
         </Route>
 
         {/* 🚚 Driver Routes (Protected) */}
@@ -126,6 +133,9 @@ function App() {
           <Route path="checkout" element={<ShoppingCheckout />} />
           <Route path="account" element={<ShoppingAccount />} />
           <Route path="search" element={<SearchProducts />} />
+
+          <Route path="orders" element={<ShoppingOrders />} />
+          <Route path="orders/:id/track" element={<ShoppingOrderTrack />} />
         </Route>
 
         {/* 🚫 Other Pages */}

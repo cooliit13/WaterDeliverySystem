@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ShoppingBasket,
   UserPlus,
+  Star,
 } from "lucide-react";
 import { Fragment } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,9 +15,8 @@ const adminSidebarMenuItems = [
   { id: "inventory", label: "Inventory", path: "/admin/inventory", icon: <ShoppingBasket /> },
   { id: "products", label: "Products", path: "/admin/products", icon: <ShoppingBasket /> },
   { id: "orders", label: "Orders", path: "/admin/orders", icon: <BadgeCheck /> },
+  { id: "ratings", label: "Ratings", path: "/admin/ratings", icon: <Star /> }, // <-- added
   { id: "add-driver", label: "Add Driver", path: "/admin/add-driver", icon: <UserPlus /> },
-
-  // ✅ ONLY NEW ITEM NEEDED
   { id: "pos", label: "POS (Walk-In)", path: "/admin/pos", icon: <ShoppingBasket /> },
 ];
 

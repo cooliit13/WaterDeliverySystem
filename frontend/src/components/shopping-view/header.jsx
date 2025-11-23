@@ -25,6 +25,15 @@ import { fetchCartItems } from "@/store/shop/cart-slice";
 import { Label } from "../ui/label";
 import { toast } from "react-hot-toast";
 
+// socket.io-client
+import { io } from "socket.io-client";
+
+/*
+  NOTE: Developer-uploaded image path (if you want to use it somewhere)
+  We'll transform this path into a URL where needed:
+  /mnt/data/af443099-32a9-46ae-813c-01006f97e31f.png
+*/
+const UPLOADED_IMG_PATH = "/mnt/data/af443099-32a9-46a e-813c-01006f97e31f.png"; // keep as reference or replace with real path
 
 function MenuItems() {
   const navigate = useNavigate();
@@ -69,9 +78,22 @@ function MenuItems() {
 function HeaderRightContent() {
   const { user } = useSelector((state) => state.auth);
   const { cartItems } = useSelector((state) => state.shopCart);
+  const { orderList } = useSelector((state) => state.shopOrder || {});
   const [openCartSheet, setOpenCartSheet] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  // count how many orders are "On the Way" (case-insensitive)
+  const onTheWayCount = Array.isArray(orderList)
+    ? orderList.filter(
+        (o) =>
+          String(o?.orderStatus || "")
+            .toLowerCase()
+            .replace(/\s+/g, "") === "ontheway" ||
+          String(o?.orderStatus || "").toLowerCase() === "on the way" ||
+          String(o?.orderStatus || "").toLowerCase() === "on-the-way"
+      ).length
+    : 0;
 
   const handleLogout = () => {
     toast(
@@ -122,8 +144,93 @@ function HeaderRightContent() {
     }
   }, [dispatch, user?.id]);
 
+  // ---------- Realtime: connect to socket and listen for order updates ----------
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Vite-compatible env usage; set VITE_SOCKET_URL in your frontend .env (fallback to localhost:5000)
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+    const socket = io(SOCKET_URL, { reconnectionAttempts: 5, transports: ["websocket", "polling"] });
+
+    // identify with server (simple approach)
+    socket.on("connect", () => {
+      try {
+        socket.emit("identify", user.id);
+      } catch (err) {
+        /* swallow */
+      }
+      // debug log
+      // console.log("[CLIENT SOCKET] connected", socket.id);
+    });
+
+    // handle incoming order status updates
+    const onOrderStatusUpdate = (payload) => {
+      // payload expected: { orderId, status, updatedAt, ... }
+      const { orderId, status } = payload || {};
+
+      // show toast with action to view order
+      toast((t) => (
+        <div className="p-2">
+          <div className="font-semibold">Order Update</div>
+          <div className="text-sm">Order #{orderId} is now <strong>{status}</strong></div>
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                toast.dismiss(t.id);
+                navigate(`/shop/orders/${orderId}`);
+              }}
+            >
+              View order
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => toast.dismiss(t.id)}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      ), { duration: 8000, position: "top-right" });
+    };
+
+    socket.on("order:status:update", onOrderStatusUpdate);
+
+    socket.on("connect_error", (err) => {
+      // eslint-disable-next-line no-console
+      console.warn("Socket connect error:", err);
+    });
+
+    // cleanup
+    return () => {
+      socket.off("order:status:update", onOrderStatusUpdate);
+      try {
+        socket.disconnect();
+      } catch (err) {
+        // ignore
+      }
+    };
+  }, [user?.id, dispatch, navigate]);
+
+  // ---------------------------------------------------------------------------
+
   return (
     <div className="flex lg:items-center lg:flex-row flex-col gap-4">
+      {/*  Track Orders Button (next to Cart) */}
+      <Button
+        onClick={() => navigate("/shop/orders")}
+        variant="outline"
+        className="hidden sm:inline-flex items-center gap-2"
+        title="Track your orders"
+      >
+        <span className="text-lg"></span>
+        <span className="text-sm">Track Orders</span>
+
+        {/* small badge if there are on-the-way orders */}
+        {onTheWayCount > 0 && (
+          <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-xs px-2 py-0.5">
+            {onTheWayCount}
+          </span>
+        )}
+      </Button>
+
       {/* 🛒 Cart Button */}
       <Sheet open={openCartSheet} onOpenChange={setOpenCartSheet}>
         <Button
@@ -188,8 +295,7 @@ function HeaderRightContent() {
   );
 }
 
-
-
+// ShoppingHeader (unchanged)
 function ShoppingHeader() {
   const { isAuthenticated } = useSelector((state) => state.auth);
 

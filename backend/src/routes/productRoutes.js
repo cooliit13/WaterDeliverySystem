@@ -48,7 +48,7 @@ router.get("/get-all", async (req, res) => {
   }
 });
 
-// Public route for customer/shop frontend
+// Public route for customer/shop frontend (list)
 router.get("/get", async (req, res) => {
   try {
     const { sortBy } = req.query;
@@ -74,7 +74,40 @@ router.get("/get", async (req, res) => {
   }
 });
 
-// ------------------ NEW / MISSING ROUTES ADDED ------------------
+// ------------------ ADDED MINIMAL ROUTES ------------------
+
+// Admin-style single-get: /api/admin/products/get/:id
+// (Your frontend attempted this endpoint; adding it prevents those 404s)
+router.get("/get/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+    return res.json({ success: true, product });
+  } catch (err) {
+    console.error("Error fetching product by id (get/:id):", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// Shop-style single-get: /api/shop/products/:id
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+    return res.json({ success: true, product });
+  } catch (err) {
+    console.error("Error fetching product by id (:id):", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ------------------ EDIT / DELETE ------------------
 
 // Edit product (Admin) — matches frontend PUT /api/admin/products/edit/:id
 router.put("/edit/:id", authMiddleware, upload.single("image"), ProductController.editProduct);
