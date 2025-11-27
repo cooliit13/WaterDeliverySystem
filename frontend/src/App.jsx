@@ -43,6 +43,11 @@ import SearchProducts from "./pages/shopping-view/search";
 // NEW: Admin Ratings page
 import AdminRatings from "@/components/admin-view/AdminRatings";
 
+// ---- NEW IMPORTS (minimal) ----
+import UsersAdmin from "./pages/admin-view/UsersAdmin";
+import DriversAdmin from "./pages/admin-view/DriversAdmin";
+// -------------------------------
+
 // 🚫 Other Pages
 import NotFound from "./pages/not-found";
 import UnauthPage from "./pages/unauth-page";
@@ -112,6 +117,10 @@ function App() {
 
           {/* <-- NEW Admin Ratings Route */}
           <Route path="ratings" element={<AdminRatings />} />
+
+          {/* <-- NEW: Users & Drivers admin routes (minimal additions) */}
+          <Route path="users" element={<UsersAdmin />} />
+          <Route path="drivers" element={<DriversAdmin />} />
         </Route>
 
         {/* 🚚 Driver Routes (Protected) */}

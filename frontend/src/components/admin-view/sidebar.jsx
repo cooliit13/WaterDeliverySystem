@@ -1,3 +1,4 @@
+// src/components/admin-view/sidebar.jsx
 import {
   BadgeCheck,
   ChartNoAxesCombined,
@@ -5,6 +6,8 @@ import {
   ShoppingBasket,
   UserPlus,
   Star,
+  Users,
+  Truck,
 } from "lucide-react";
 import { Fragment } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +18,9 @@ const adminSidebarMenuItems = [
   { id: "inventory", label: "Inventory", path: "/admin/inventory", icon: <ShoppingBasket /> },
   { id: "products", label: "Products", path: "/admin/products", icon: <ShoppingBasket /> },
   { id: "orders", label: "Orders", path: "/admin/orders", icon: <BadgeCheck /> },
-  { id: "ratings", label: "Ratings", path: "/admin/ratings", icon: <Star /> }, // <-- added
+  { id: "ratings", label: "Ratings", path: "/admin/ratings", icon: <Star /> },
+  { id: "drivers", label: "Drivers", path: "/admin/drivers", icon: <Truck /> },
+  { id: "users", label: "Users", path: "/admin/users", icon: <Users /> },
   { id: "add-driver", label: "Add Driver", path: "/admin/add-driver", icon: <UserPlus /> },
   { id: "pos", label: "POS (Walk-In)", path: "/admin/pos", icon: <ShoppingBasket /> },
 ];
@@ -52,9 +57,10 @@ export default function AdminSideBar({ open, setOpen }) {
         <SheetContent side="left" className="w-64">
           <div className="flex flex-col h-full">
             <SheetHeader className="border-b">
+              {/* Use a div inside SheetTitle to avoid heading-in-heading nesting */}
               <SheetTitle className="flex items-center gap-2 mt-5 mb-5">
                 <ChartNoAxesCombined size={30} />
-                <h1 className="text-2xl font-extrabold">Admin Panel</h1>
+                <div className="text-2xl font-extrabold">Admin Panel</div>
               </SheetTitle>
             </SheetHeader>
             <MenuItems setOpen={setOpen} />
@@ -69,7 +75,8 @@ export default function AdminSideBar({ open, setOpen }) {
           className="flex cursor-pointer items-center gap-2 mb-4"
         >
           <ChartNoAxesCombined size={30} />
-          <h1 className="text-2xl font-extrabold">Water Admin</h1>
+          {/* keep as div to match mobile and avoid nesting issues */}
+          <div className="text-2xl font-extrabold">Water Admin</div>
         </div>
 
         <MenuItems />

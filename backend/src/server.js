@@ -21,6 +21,7 @@ import posRoutes from "./routes/posRoutes.js";
 import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import productStockRoutes from "./routes/productStockRoutes.js";
 import adminRatingsRouter from "./routes/AdminRatings.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
 import http from "http";
 import { Server as IOServer } from "socket.io";
 
@@ -66,6 +67,7 @@ app.use("/api/admin/pos", posRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admin/products", productStockRoutes);
 app.use("/api/admin/ratings", adminRatingsRouter);
+app.use("/api/admin", adminUserRoutes);
 // Test endpoint to verify backend connectivity
 app.get("/api/test", (req, res) => {
   res.json({ message: "✅ Backend is running and reachable from frontend!" });
