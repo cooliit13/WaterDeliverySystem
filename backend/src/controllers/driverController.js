@@ -1,96 +1,87 @@
+// backend/src/controllers/driverController.js
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
-import Order from "../models/order.js";   // ✅ REQUIRED
+import Order from "../models/order.js";
+import cloudinary from "../config/cloudinary.js"; // adjust path if your cloudinary export is elsewhere
+import streamifier from "streamifier";
 
-// ✅ CREATE DRIVER ACCOUNT (admin-side)
+/**
+ * ADMIN: createDriverAccount
+ * (Creates a driver record, used by adminRoutes)
+ */
 export const createDriverAccount = async (req, res) => {
   try {
-    console.log("📥 Incoming driver data:", req.body);
-
     const { name, email, password, contactNumber, vehicleNumber } = req.body;
 
     if (!name || !email || !password || !contactNumber || !vehicleNumber) {
-      console.log("❌ Missing required fields");
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const existingDriver = await Driver.findOne({ email });
-    if (existingDriver) {
-      console.log("⚠️ Driver already exists:", email);
-      return res.status(400).json({ message: "Driver already exists" });
-    }
+    const existing = await Driver.findOne({ email });
+    if (existing) return res.status(400).json({ message: "Driver already exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("🔐 Password hashed");
+    const hashed = await bcrypt.hash(password, 10);
 
     const newDriver = await Driver.create({
       name,
       email,
-      password: hashedPassword,
-      contactNumber,
-      vehicleNumber,
-    });
-
-    console.log("✅ Driver created:", newDriver._id);
-
-    res.status(201).json({
-      success: true,
-      message: "Driver account created successfully",
-      driver: newDriver,
-    });
-  } catch (error) {
-    console.error("🔥 Create driver error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ REGISTER DRIVER
-export const registerDriver = async (req, res) => {
-  try {
-    const { name, email, password, contactNumber, vehicleNumber } = req.body;
-
-    const existingDriver = await Driver.findOne({ email });
-    if (existingDriver) {
-      return res.status(400).json({ message: "Driver already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newDriver = await Driver.create({
-      name,
-      email,
-      password: hashedPassword,
+      password: hashed,
       contactNumber,
       vehicleNumber,
       status: "available",
     });
 
-    res.status(201).json({
-      message: "Driver registered successfully",
-      driver: newDriver,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(201).json({ success: true, message: "Driver created", driver: newDriver });
+  } catch (err) {
+    console.error("createDriverAccount error:", err);
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ LOGIN DRIVER
+/**
+ * registerDriver - public registration for drivers
+ */
+export const registerDriver = async (req, res) => {
+  try {
+    const { name, email, password, contactNumber, vehicleNumber } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
+
+    const exists = await Driver.findOne({ email });
+    if (exists) return res.status(400).json({ message: "Driver already exists" });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const driver = await Driver.create({
+      name,
+      email,
+      password: hashed,
+      contactNumber,
+      vehicleNumber,
+      status: "available",
+    });
+
+    res.status(201).json({ message: "Driver registered", driver });
+  } catch (err) {
+    console.error("registerDriver error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * loginDriver
+ */
 export const loginDriver = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const driver = await Driver.findOne({ email });
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
-    const isMatch = await bcrypt.compare(password, driver.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid password" });
+    const ok = await bcrypt.compare(password, driver.password);
+    if (!ok) return res.status(400).json({ message: "Invalid password" });
 
-    const token = jwt.sign(
-      { id: driver._id, role: "driver" },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: driver._id, role: "driver" }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.json({
       message: "Login successful",
@@ -102,64 +93,71 @@ export const loginDriver = async (req, res) => {
         status: driver.status,
       },
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("loginDriver error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ GET DRIVER PROFILE
+/**
+ * getDriverProfile
+ */
 export const getDriverProfile = async (req, res) => {
   try {
     const driver = await Driver.findById(req.user.id).select("-password");
-
     if (!driver) return res.status(404).json({ message: "Driver not found" });
-
     res.json(driver);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("getDriverProfile error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ UPDATE DRIVER PROFILE
+/**
+ * updateDriverProfile
+ */
 export const updateDriverProfile = async (req, res) => {
   try {
     const driver = await Driver.findById(req.user.id);
-
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
-    driver.name = req.body.name || driver.name;
-    driver.contactNumber = req.body.contactNumber || driver.contactNumber;
-    driver.vehicleNumber = req.body.vehicleNumber || driver.vehicleNumber;
+    driver.name = req.body.name ?? driver.name;
+    driver.contactNumber = req.body.contactNumber ?? driver.contactNumber;
+    driver.vehicleNumber = req.body.vehicleNumber ?? driver.vehicleNumber;
 
     if (req.body.password) {
       driver.password = await bcrypt.hash(req.body.password, 10);
     }
 
-    const updatedDriver = await driver.save();
-    res.json(updatedDriver);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const updated = await driver.save();
+    res.json(updated);
+  } catch (err) {
+    console.error("updateDriverProfile error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// DRIVER GETS ASSIGNED & APPROVED ORDERS
+/**
+ * getAssignedOrders - driver sees assigned orders (accepted/delivering)
+ */
 export const getAssignedOrders = async (req, res) => {
   try {
     const driverId = req.user.id;
-
     const orders = await Order.find({
-      driverId: driverId,
+      driverId,
       status: { $in: ["accepted", "delivering"] },
     }).populate("customerId", "fullName phoneNumber email");
 
     res.json(orders);
-  } catch (error) {
-    console.error("Driver getAssignedOrders error:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("getAssignedOrders error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ UPDATE DELIVERY STATUS
+/**
+ * updateDeliveryStatus - update status for an order (driver only)
+ */
 export const updateDeliveryStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -168,45 +166,80 @@ export const updateDeliveryStatus = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.driverId?.toString() !== req.user.id) {
+    // ensure only assigned driver can change
+    if (String(order.driverId) !== String(req.user.id)) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     order.status = status;
     await order.save();
 
-    res.json({ message: "Order status updated", order });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "Order status updated", order });
+  } catch (err) {
+    console.error("updateDeliveryStatus error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ UPLOAD PROOF OF DELIVERY
+/**
+ * uploadProofOfDelivery
+ * - expects multer memoryStorage (req.file.buffer exists)
+ * - uploads to Cloudinary and stores secure URL in order.proofOfDelivery
+ * - sets order.status = 'completed'
+ * - marks driver available again
+ */
 export const uploadProofOfDelivery = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: "No file uploaded (expecting memory upload)" });
     }
 
-    const proofOfDelivery = "/uploads/proofs/" + req.file.filename;
+    // helper to stream buffer to Cloudinary
+    const streamUpload = (buffer) =>
+      new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: "water-delivery/proofs", resource_type: "image" },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(buffer).pipe(uploadStream);
+      });
+
+    const result = await streamUpload(req.file.buffer);
+
+    const secureUrl = result.secure_url || result.url;
+    if (!secureUrl) {
+      console.error("Cloudinary upload returned no url", result);
+      return res.status(500).json({ message: "Cloudinary did not return a url" });
+    }
 
     const order = await Order.findByIdAndUpdate(
       orderId,
       {
-        proofOfDelivery,
+        proofOfDelivery: secureUrl,
         status: "completed",
       },
       { new: true }
     );
 
+    if (!order) return res.status(404).json({ message: "Order not found after upload" });
+
+    // mark driver available
     if (order.driverId) {
       await Driver.findByIdAndUpdate(order.driverId, { status: "available" });
     }
 
-    res.json({ message: "Proof uploaded successfully", order });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.json({
+      message: "Proof uploaded & order completed",
+      proofUrl: secureUrl,
+      order,
+    });
+  } catch (err) {
+    console.error("uploadProofOfDelivery error:", err);
+    return res.status(500).json({ message: err.message });
   }
 };

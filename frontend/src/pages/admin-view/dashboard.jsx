@@ -67,6 +67,11 @@ function AdminDashboard() {
 
   const { toast } = useToast();
 
+  // ======= POD gallery state (minimal) =======
+  const [podGalleryOpen, setPodGalleryOpen] = useState(false);
+  const [podGalleryUrls, setPodGalleryUrls] = useState([]);
+  const [podGalleryIndex, setPodGalleryIndex] = useState(0);
+
   // ======= Load feature images =======
   useEffect(() => {
     dispatch(getFeatureImages());
@@ -549,6 +554,67 @@ function AdminDashboard() {
     return productMap[key] ?? null;
   }
 
+  // ======= Minimal helper: return array of POD URLs (deduped) =======
+  const findOrderProofImages = (order) => {
+    if (!order) return [];
+    const urls = [];
+
+    const push = (v) => {
+      if (!v) return;
+      if (typeof v === "string" && v.trim()) urls.push(v.trim());
+      else if (v?.image && typeof v.image === "string") urls.push(v.image.trim());
+      else if (v?.url && typeof v.url === "string") urls.push(v.url.trim());
+    };
+
+    // Primary field (your backend writes to this)
+    push(order.proofOfDelivery);
+
+    // Other common names
+    push(order.proofImage);
+    push(order.deliveryProof);
+    if (Array.isArray(order.deliveryProofs)) order.deliveryProofs.forEach((p) => push(p?.image ?? p?.url ?? p));
+    if (Array.isArray(order.photos)) order.photos.forEach((p) => push(p));
+    if (Array.isArray(order.images)) order.images.forEach((p) => push(p));
+    if (Array.isArray(order.pictures)) order.pictures.forEach((p) => push(p));
+
+    // item-level proofs
+    if (Array.isArray(order.items)) {
+      order.items.forEach((it) => {
+        if (!it) return;
+        push(it.proofImage ?? it.deliveryProof ?? it.photo ?? it.image ?? it.url);
+        if (Array.isArray(it.photos)) it.photos.forEach((p) => push(p));
+      });
+    }
+
+    return Array.from(new Set(urls)).filter(Boolean);
+  };
+
+  // ======= gallery control helpers =======
+  const openPodGallery = (urls = [], startIndex = 0) => {
+    if (!Array.isArray(urls) || urls.length === 0) return;
+    setPodGalleryUrls(urls);
+    setPodGalleryIndex(Math.max(0, Math.min(startIndex, urls.length - 1)));
+    setPodGalleryOpen(true);
+  };
+
+  const closePodGallery = () => {
+    setPodGalleryOpen(false);
+    setPodGalleryUrls([]);
+    setPodGalleryIndex(0);
+  };
+
+  // keyboard support for gallery
+  useEffect(() => {
+    if (!podGalleryOpen) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") closePodGallery();
+      if (e.key === "ArrowLeft") setPodGalleryIndex((i) => Math.max(0, i - 1));
+      if (e.key === "ArrowRight") setPodGalleryIndex((i) => Math.min(podGalleryUrls.length - 1, i + 1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [podGalleryOpen, podGalleryUrls.length]);
+
   return (
     <div className="p-6 space-y-10">
       {/* Dashboard top row: expenses + quick stats */}
@@ -692,49 +758,97 @@ function AdminDashboard() {
           // <-- SCROLLABLE container applied ONLY to Delivery Orders list
           <div className="max-h-[320px] overflow-auto pr-2">
             <ul className="space-y-3">
-              {filteredAdminOrders.slice(0, 50).map((order) => (
-                <li key={order._id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="text-sm text-gray-600 mb-1">
-                      <strong>{order.customerId?.fullName || "Customer"}</strong>
-                      <span className="ml-3 text-xs text-gray-400">
-                        {new Date(order.deliveryDate || order.updatedAt || order.createdAt || Date.now()).toLocaleString()}
-                      </span>
+              {filteredAdminOrders.slice(0, 50).map((order) => {
+                // small: gather proof urls for this order
+                const proofUrls = findOrderProofImages(order);
+                const proofUrl = proofUrls.length > 0 ? proofUrls[0] : null;
+
+                // useful debug (optional)
+                if (!proofUrl && (order.status?.toLowerCase?.() === "delivered" || order.status?.toLowerCase?.() === "completed")) {
+                  // eslint-disable-next-line no-console
+                  console.debug("No POD for order:", order._id ?? order.id ?? "(no id)");
+                }
+
+                return (
+                  <li key={order._id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-600 mb-1">
+                        <strong>{order.customerId?.fullName || "Customer"}</strong>
+                        <span className="ml-3 text-xs text-gray-400">
+                          {new Date(order.deliveryDate || order.updatedAt || order.createdAt || Date.now()).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {/* Items: vertical list, resolve productId -> title using productMap */}
+                      <div className="text-sm text-gray-700">
+                        {Array.isArray(order.items) && order.items.length > 0 ? (
+                          <div className="flex flex-col gap-1">
+                            {order.items.map((it, i) => {
+                              // resolve title: try productId then fallback to embedded fields
+                              const prodId = it.productId ?? (typeof it.product === "string" ? it.product : it.product?._id ?? null);
+                              const titleFromMap = prodId ? resolveProductTitle(prodId) : null;
+                              const embedded = it.productName ?? it.name ?? it.title ?? (it.product && (it.product.title ?? it.product.name)) ?? null;
+                              const displayName = titleFromMap || embedded || `productId:${prodId ?? "?"}`;
+                              const qty = it.quantity ?? it.qty ?? 0;
+                              return (
+                                <div key={i} className="truncate">
+                                  {displayName} ×{qty}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          ""
+                        )}
+                      </div>
                     </div>
 
-                    {/* Items: vertical list, resolve productId -> title using productMap */}
-                    <div className="text-sm text-gray-700">
-                      {Array.isArray(order.items) && order.items.length > 0 ? (
-                        <div className="flex flex-col gap-1">
-                          {order.items.map((it, i) => {
-                            // resolve title: try productId then fallback to embedded fields
-                            const prodId = it.productId ?? (typeof it.product === "string" ? it.product : it.product?._id ?? null);
-                            const titleFromMap = prodId ? resolveProductTitle(prodId) : null;
-                            const embedded = it.productName ?? it.name ?? it.title ?? (it.product && (it.product.title ?? it.product.name)) ?? null;
-                            const displayName = titleFromMap || embedded || `productId:${prodId ?? "?"}`;
-                            const qty = it.quantity ?? it.qty ?? 0;
-                            return (
-                              <div key={i} className="truncate">
-                                {displayName} ×{qty}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        ""
+                    <div className="ml-4 text-right">
+                      {/* compute order revenue quickly */}
+                      <div className="font-semibold">
+                        ₱{(Array.isArray(order.items) ? order.items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.quantity ?? it.qty ?? 0)), 0) : 0).toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-500">{order.status}</div>
+
+                      {/* POD thumbnail (first image) */}
+                      {proofUrl && (
+                        <img
+                          src={proofUrl}
+                          alt="POD thumbnail"
+                          className="w-[80px] h-[80px] object-cover rounded border mt-2 cursor-pointer"
+                          onClick={() => {
+                            setPodGalleryUrls(proofUrls);
+                            setPodGalleryIndex(0);
+                            setPodGalleryOpen(true);
+                          }}
+                          onError={(e) => { e.currentTarget.style.opacity = 0.6; }}
+                          title="Click to open POD gallery"
+                        />
                       )}
-                    </div>
-                  </div>
 
-                  <div className="ml-4 text-right">
-                    {/* compute order revenue quickly */}
-                    <div className="font-semibold">
-                      ₱{(Array.isArray(order.items) ? order.items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.quantity ?? it.qty ?? 0)), 0) : 0).toFixed(2)}
+                      {/* Show POD button (works even if no thumbnail shown) */}
+                      <Button
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          if (proofUrls.length > 0) {
+                            setPodGalleryUrls(proofUrls);
+                            setPodGalleryIndex(0);
+                            setPodGalleryOpen(true);
+                          } else {
+                            toast({
+                              title: "No proof found",
+                              description: "Driver hasn't uploaded proof for this order yet.",
+                            });
+                          }
+                        }}
+                      >
+                        Show POD
+                      </Button>
                     </div>
-                    <div className="text-xs text-gray-500">{order.status}</div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
@@ -920,6 +1034,71 @@ function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Minimal POD gallery modal */}
+      {podGalleryOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPodGalleryOpen(false)}
+        >
+          <div className="bg-white rounded-lg max-w-[95%] max-h-[95%] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold">Proof of Delivery</h3>
+                <div className="text-sm text-gray-500">{podGalleryIndex + 1} / {podGalleryUrls.length}</div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a href={podGalleryUrls[podGalleryIndex]} target="_blank" rel="noreferrer" className="text-sm underline">Open in new tab</a>
+                <a href={podGalleryUrls[podGalleryIndex]} download className="text-sm underline">Download</a>
+                <Button size="sm" variant="outline" onClick={() => setPodGalleryOpen(false)}>Close</Button>
+              </div>
+            </div>
+
+            <div className="p-4 flex items-center justify-center" style={{ minHeight: 400 }}>
+              <button
+                type="button"
+                onClick={() => setPodGalleryIndex((i) => Math.max(0, i - 1))}
+                className="px-3 py-2 rounded hover:bg-gray-100"
+                aria-label="Previous"
+                disabled={podGalleryIndex === 0}
+              >
+                ◀
+              </button>
+
+              <div className="mx-4 flex-1 flex items-center justify-center">
+                <img src={podGalleryUrls[podGalleryIndex]} alt={`POD ${podGalleryIndex + 1}`} className="max-h-[70vh] object-contain" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPodGalleryIndex((i) => Math.min(podGalleryUrls.length - 1, i + 1))}
+                className="px-3 py-2 rounded hover:bg-gray-100"
+                aria-label="Next"
+                disabled={podGalleryIndex === podGalleryUrls.length - 1}
+              >
+                ▶
+              </button>
+            </div>
+
+            {podGalleryUrls.length > 1 && (
+              <div className="p-2 border-t overflow-x-auto whitespace-nowrap">
+                {podGalleryUrls.map((u, i) => (
+                  <img
+                    key={u + i}
+                    src={u}
+                    alt={`thumb-${i}`}
+                    onClick={() => setPodGalleryIndex(i)}
+                    className={`inline-block w-20 h-20 object-cover rounded m-1 cursor-pointer border ${i === podGalleryIndex ? "ring-2 ring-blue-500" : ""}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

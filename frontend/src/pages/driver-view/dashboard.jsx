@@ -15,11 +15,9 @@ import {
   Camera,
 } from "lucide-react";
 
-// ---- Leaflet imports ----
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-// Fix default icon paths for Vite/CRA
 import iconUrl from "leaflet/dist/images/marker-icon.png";
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import shadowUrl from "leaflet/dist/images/marker-shadow.png";
@@ -29,24 +27,22 @@ L.Icon.Default.mergeOptions({
   iconUrl,
   shadowUrl,
 });
-// -------------------------
 
 function DriverDashboard() {
   const [deliveries, setDeliveries] = useState([]);
   const [notification, setNotification] = useState("");
   const navigate = useNavigate();
 
-  // geocoded coords cache: { "<address>": { lat, lng } }
   const [coordsMap, setCoordsMap] = useState({});
 
-  // hidden file input reference
+  // file input ref & state
   const fileInputRef = useRef(null);
   const currentOrderRef = useRef(null);
+  // flag to indicate the file picker was opened for "deliver" action
+  const pendingDeliverRef = useRef(false);
 
-  // REF: keep a ref to the active AbortController so logout can cancel inflight requests
   const activeControllerRef = useRef(null);
 
-  // ✅ Load driver orders (cancellable)
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -138,7 +134,7 @@ function DriverDashboard() {
     }
   };
 
-  // ---- Geocode addresses using Nominatim (free) ----
+  // geocode
   const geocodeAddress = async (address) => {
     if (!address) return null;
     if (coordsMap[address]) return coordsMap[address];
@@ -165,7 +161,6 @@ function DriverDashboard() {
     return null;
   };
 
-  // When deliveries change: seed coordsMap from DB coords, then geocode remaining
   useEffect(() => {
     if (!deliveries || deliveries.length === 0) return;
 
@@ -198,7 +193,7 @@ function DriverDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveries]);
 
-  // ✅ Update delivery status
+  // keep existing status update (for on the way / cancel) — deliver handled specially
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem("token");
@@ -207,80 +202,74 @@ function DriverDashboard() {
         return;
       }
 
-      if (newStatus === "completed") {
-        const deliverRes = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/deliver`, {
+      // For non-completed statuses we reuse existing endpoint
+      if (newStatus !== "completed") {
+        const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ status: newStatus }),
         });
 
-        if (deliverRes.status === 401) {
+        if (res.status === 401) {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
           navigate("/auth/login", { replace: true });
           return;
         }
-
-        if (!deliverRes.ok) {
-          const err = await deliverRes.json().catch(() => ({}));
-          console.error("Deliver endpoint failed:", err);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          console.error("Status update failed:", body);
           return;
         }
-      }
-
-      const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (res.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
-        navigate("/auth/login", { replace: true });
+        await fetchDriverOrders();
         return;
       }
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("Status update failed:", body);
-        return;
-      }
-
-      await fetchDriverOrders();
+      // If newStatus === 'completed' we expect the delivered flow to be handled by handleDeliverClick
+      console.warn("Use the delivered button flow that includes proof upload.");
     } catch (error) {
       console.log("Status update error:", error);
     }
   };
 
-  // ✅ Upload Proof of Delivery
-  const uploadProof = async (file) => {
-    if (!file || !currentOrderRef.current) return;
+  // ---------- NEW FLOW: Delivered -> pick image -> upload proof -> mark delivered ----------
+  const handleDeliverClick = (orderId) => {
+    // set refs so file input knows intent
+    currentOrderRef.current = orderId;
+    pendingDeliverRef.current = true;
 
-    const orderId = currentOrderRef.current;
-    const formData = new FormData();
-    formData.append("proof", file);
+    // trigger native file picker
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  // upload the file and then mark delivered
+  const uploadProofAndMarkDelivered = async (orderId, file) => {
+    if (!orderId || !file) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth/login");
+      return;
+    }
 
     try {
-      const token = localStorage.getItem("token");
+      // 1) Upload proof to backend (backend should upload to Cloudinary)
+      const fd = new FormData();
+      fd.append("proof", file);
 
-      const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/proof`, {
+      const uploadRes = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/proof`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          // DO NOT set Content-Type here — browser will set multipart/form-data boundary
         },
-        body: formData,
+        body: fd,
       });
 
-      if (res.status === 401) {
+      if (uploadRes.status === 401) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
@@ -288,30 +277,87 @@ function DriverDashboard() {
         return;
       }
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+      if (!uploadRes.ok) {
+        const body = await uploadRes.json().catch(() => ({}));
         console.error("Upload proof failed:", body);
         return;
       }
 
+      // optionally use response data (order with proof url)
+      // const uploadJson = await uploadRes.json();
+
+      // 2) Mark order as delivered (call deliver endpoint)
+      const deliverRes = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/deliver`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (deliverRes.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+
+      if (!deliverRes.ok) {
+        const body = await deliverRes.json().catch(() => ({}));
+        console.error("Mark delivered failed:", body);
+        return;
+      }
+
+      // refresh list
       await fetchDriverOrders();
-    } catch (error) {
-      console.log("Upload error:", error);
+      console.log("Proof uploaded and order marked delivered");
+    } catch (err) {
+      console.error("uploadProofAndMarkDelivered error:", err);
+    } finally {
+      // reset refs
+      pendingDeliverRef.current = false;
+      currentOrderRef.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
+  // file input onChange: detect whether it's for deliver flow
+  const onFileChange = (e) => {
+    const file = e?.target?.files?.[0] ?? null;
+    const orderId = currentOrderRef.current;
+    if (!file || !orderId) {
+      // cleanup
+      pendingDeliverRef.current = false;
+      currentOrderRef.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (pendingDeliverRef.current) {
+      // start upload + deliver
+      uploadProofAndMarkDelivered(orderId, file);
+      return;
+    }
+
+    // fallback: if file input used for other actions in future
+    // cleanup
+    currentOrderRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleOpenFile = (orderId) => {
+    // legacy helper if you want a separate Upload Proof button in future
     currentOrderRef.current = orderId;
+    pendingDeliverRef.current = false; // not a deliver action
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
-  // REPLACED: handleLogout now aborts inflight fetch, clears UI, dispatches event, then navigates
   const handleLogout = () => {
-    // clear auth
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
-    // abort any inflight fetch
     if (activeControllerRef.current) {
       try {
         activeControllerRef.current.abort();
@@ -319,22 +365,18 @@ function DriverDashboard() {
       activeControllerRef.current = null;
     }
 
-    // clear local UI state
     setDeliveries([]);
     setNotification("");
 
-    // Dispatch authChanged so ProtectedRoute re-evaluates quickly
     try {
       window.dispatchEvent(new Event("authChanged"));
     } catch (e) {}
 
-    // tiny delay so event listeners run before navigation — prevents blink/stay
     setTimeout(() => {
       navigate("/auth/login", { replace: true });
     }, 10);
   };
 
-  // Map center: first available geocoded delivery or fallback coordinates
   const firstCoords = (() => {
     for (const d of deliveries) {
       const addr = d.deliveryAddress || d.address || "";
@@ -348,7 +390,6 @@ function DriverDashboard() {
 
   return (
     <div className="p-6 space-y-8">
-      {/* HEADER */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">🚚 Driver Dashboard</h1>
 
@@ -369,7 +410,7 @@ function DriverDashboard() {
         ref={fileInputRef}
         className="hidden"
         accept="image/*"
-        onChange={(e) => uploadProof(e.target.files[0])}
+        onChange={onFileChange}
       />
 
       <Tabs defaultValue="deliveries">
@@ -378,18 +419,13 @@ function DriverDashboard() {
           <TabsTrigger value="map">GPS & Navigation</TabsTrigger>
         </TabsList>
 
-        {/* Deliveries Tab */}
         <TabsContent value="deliveries">
-          {deliveries.length === 0 && (
-            <p className="text-gray-500">No assigned deliveries yet.</p>
-          )}
+          {deliveries.length === 0 && <p className="text-gray-500">No assigned deliveries yet.</p>}
 
           {deliveries.map((order) => (
             <Card key={order._id} className="mb-4">
               <CardHeader>
-                <CardTitle>
-                  {order.customerId?.fullName || "Unknown Customer"}
-                </CardTitle>
+                <CardTitle>{order.customerId?.fullName || "Unknown Customer"}</CardTitle>
               </CardHeader>
 
               <CardContent className="space-y-2">
@@ -430,20 +466,18 @@ function DriverDashboard() {
                   </Badge>
                 </div>
 
-                {/* Proof Image Preview (uses proofOfDelivery) */}
                 {order.proofOfDelivery && (
                   <img
-                    src={`http://localhost:5000${
-                      order.proofOfDelivery.startsWith("/")
+                    src={
+                      order.proofOfDelivery.startsWith("http")
                         ? order.proofOfDelivery
-                        : "/" + order.proofOfDelivery
-                    }`}
+                        : `http://localhost:5000${order.proofOfDelivery.startsWith("/") ? "" : "/"}${order.proofOfDelivery}`
+                    }
                     alt="Proof"
                     className="rounded-lg mt-3 w-48 border"
                   />
                 )}
 
-                {/* Buttons */}
                 <div className="flex gap-2 mt-3 flex-wrap">
                   <Button
                     variant="outline"
@@ -452,15 +486,13 @@ function DriverDashboard() {
                     <CheckCircle className="h-4 w-4 mr-1" /> On the Way
                   </Button>
 
-                  <Button variant="default" onClick={() => handleOpenFile(order._id)}>
-                    <Camera className="h-4 w-4 mr-1" /> Upload Proof
-                  </Button>
-
+                  {/* Delivered button now triggers file picker and upload -> mark delivered */}
                   <Button
                     variant="default"
-                    onClick={() => handleStatusUpdate(order._id, "completed")}
+                    onClick={() => handleDeliverClick(order._id)}
+                    className="flex items-center"
                   >
-                    <CheckCircle className="h-4 w-4 mr-1" /> Delivered
+                    <Camera className="h-4 w-4 mr-1" /> Delivered (upload proof)
                   </Button>
 
                   <Button
@@ -475,7 +507,6 @@ function DriverDashboard() {
           ))}
         </TabsContent>
 
-        {/* Map Page */}
         <TabsContent value="map">
           <Card>
             <CardHeader>
