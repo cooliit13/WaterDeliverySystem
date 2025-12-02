@@ -7,10 +7,9 @@ import { geocodeAddress } from "../utils/geocode.js";
 
 /* ---------------------------------------------
   Helper: processDelivery(orderId, itemsArrayOrNull)
-  - itemsArray: optional array of { productId, qtyDelivered } to deliver specific amounts
-  - if itemsArray is null -> deliver remaining qty for each item
   - updates Product.stock (decrement) and items.$.deliveredQty on the order
-  - sets order.status = "completed" when all delivered
+  - sets order.status = "completed" when all delivered and marks paymentStatus = "paid"
+  - returns an object with summary for debugging
 ----------------------------------------------*/
 export const processDelivery = async (orderId, itemsArray = null) => {
   if (!mongoose.Types.ObjectId.isValid(orderId)) {
@@ -22,23 +21,23 @@ export const processDelivery = async (orderId, itemsArray = null) => {
     const order = await Order.findById(orderId);
     if (!order) throw new Error("Order not found");
 
-    // Build itemsToProcess: array of { productId, qtyRequested }
     const itemsToProcess = [];
 
     if (Array.isArray(itemsArray) && itemsArray.length > 0) {
       for (const it of itemsArray) {
-        if (!it?.productId || !mongoose.Types.ObjectId.isValid(it.productId)) continue;
-        const qty = Number(it.qtyDelivered ?? it.qty ?? 0);
-        if (qty > 0) itemsToProcess.push({ productId: it.productId.toString(), qtyRequested: qty });
+        const pid = it?.productId ? String(it.productId) : null;
+        const qty = Math.max(0, Number(it.qtyDelivered ?? it.qty ?? it.quantity ?? 0));
+        if (pid && mongoose.Types.ObjectId.isValid(pid) && qty > 0) {
+          itemsToProcess.push({ productId: pid, qtyRequested: qty });
+        }
       }
     } else {
-      // Deliver remaining qty for each order item
       for (const it of order.items) {
         const orderedQty = Number(it.quantity ?? it.qty ?? 0);
         const prevDelivered = Number(it.deliveredQty ?? 0);
         const remaining = Math.max(0, orderedQty - prevDelivered);
         if (remaining > 0 && it.productId) {
-          itemsToProcess.push({ productId: it.productId.toString(), qtyRequested: remaining });
+          itemsToProcess.push({ productId: String(it.productId), qtyRequested: remaining });
         }
       }
     }
@@ -47,7 +46,6 @@ export const processDelivery = async (orderId, itemsArray = null) => {
       throw new Error("No deliverable items provided or remaining");
     }
 
-    // Try start a transaction/session (works if replica set)
     try {
       session = await mongoose.startSession();
       session.startTransaction();
@@ -55,12 +53,13 @@ export const processDelivery = async (orderId, itemsArray = null) => {
       session = null;
     }
 
+    const productUpdates = [];
+
     for (const it of itemsToProcess) {
       const pid = it.productId;
       const qtyReq = Number(it.qtyRequested || 0);
       if (!pid || qtyReq <= 0) continue;
 
-      // Find order item
       const orderItem = order.items.find((oi) => oi.productId?.toString() === pid);
       if (!orderItem) {
         if (session) { await session.abortTransaction(); session.endSession(); }
@@ -73,7 +72,7 @@ export const processDelivery = async (orderId, itemsArray = null) => {
       const deliverable = Math.max(0, Math.min(remaining, qtyReq));
       if (deliverable <= 0) continue;
 
-      // Decrement product stock
+      // decrement product stock
       const updatedProduct = await Product.findByIdAndUpdate(
         pid,
         { $inc: { stock: -deliverable } },
@@ -85,6 +84,8 @@ export const processDelivery = async (orderId, itemsArray = null) => {
         throw new Error(`Product ${pid} not found`);
       }
 
+      productUpdates.push({ productId: pid, delta: -deliverable, newStock: updatedProduct.stock });
+
       if (typeof updatedProduct.stock === "number" && updatedProduct.stock < 0) {
         // revert and abort
         await Product.findByIdAndUpdate(pid, { $inc: { stock: deliverable } }, { session });
@@ -92,23 +93,37 @@ export const processDelivery = async (orderId, itemsArray = null) => {
         throw new Error(`Insufficient stock for product ${pid}`);
       }
 
-      // Increment order item's deliveredQty
-      await Order.updateOne(
+      // increment deliveredQty on order items
+      const upd = await Order.updateOne(
         { _id: orderId, "items.productId": pid },
         { $inc: { "items.$.deliveredQty": deliverable }, $set: { updatedAt: new Date() } },
         { session }
       );
+
+      if (!upd || (upd.matchedCount === 0 && upd.nModified === 0)) {
+        // fallback: update in-memory and save
+        const idx = order.items.findIndex((oi) => oi.productId?.toString() === pid);
+        if (idx >= 0) {
+          order.items[idx].deliveredQty = (Number(order.items[idx].deliveredQty ?? 0) + deliverable);
+          order.updatedAt = new Date();
+          await order.save({ session });
+        } else {
+          console.warn(`processDelivery: could not update deliveredQty for pid ${pid} (fallback)`);
+        }
+      }
     }
 
-    // Refresh order and check completion
+    // refresh and finalize
     const freshOrder = await Order.findById(orderId).session(session);
-    const allDelivered = freshOrder.items.every((it) => (it.deliveredQty ?? 0) >= (it.quantity ?? it.qty ?? 0));
+    const allDelivered = freshOrder.items.every((it) => (Number(it.deliveredQty ?? 0) >= Number(it.quantity ?? it.qty ?? 0)));
 
     if (allDelivered) {
       freshOrder.status = "completed";
+      if (!freshOrder.paymentStatus || String(freshOrder.paymentStatus).toLowerCase() !== "paid") {
+        freshOrder.paymentStatus = "paid";
+      }
       await freshOrder.save({ session });
     } else {
-      // if some delivered, ensure status moved at least to delivering
       if (["pending", "accepted"].includes(freshOrder.status)) {
         freshOrder.status = "delivering";
         await freshOrder.save({ session });
@@ -120,20 +135,18 @@ export const processDelivery = async (orderId, itemsArray = null) => {
       session.endSession();
     }
 
-    return { success: true, message: "Delivery processed" };
+    return { success: true, message: "Delivery processed", productUpdates, orderId: String(orderId), allDelivered };
   } catch (err) {
     if (session) {
-      try { await session.abortTransaction(); session.endSession(); } catch (e) { /* ignore */ }
+      try { await session.abortTransaction(); session.endSession(); } catch (e) {}
     }
     throw err;
   }
 };
 
 /* ---------------------------------------------
-  Existing controllers (requestPurchase, getDriverOrders, getBookedDeliveryDates)
-  updated minimally to ensure items include productId and deliveredQty initialization
+  requestPurchase: improved geocoding attempts (full then fallback)
 ----------------------------------------------*/
-
 export const requestPurchase = async (req, res) => {
   console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
 
@@ -155,44 +168,49 @@ export const requestPurchase = async (req, res) => {
       deliveredQty: 0,
     }));
 
-    const formattedAddress = `
-${addressInfo.address}, 
-${addressInfo.city}, 
-${addressInfo.pincode}
-Phone: ${addressInfo.phone}
-Notes: ${addressInfo.notes || "None"}
-`.trim();
+    // build two address strings: full (detailed) and a shorter candidate
+    const fullAddress = [
+      addressInfo.address,
+      addressInfo.city,
+      addressInfo.pincode ? addressInfo.pincode : "",
+      addressInfo.notes ? `Notes: ${addressInfo.notes}` : "",
+    ].filter(Boolean).join(", ");
+
+    const shortAddress = [addressInfo.address, addressInfo.city].filter(Boolean).join(", ");
 
     const customerId = req.body.customerId || userId;
 
     let deliveryLocation = null;
     try {
-      deliveryLocation = await geocodeAddress(formattedAddress);
+      // try full address first
+      deliveryLocation = await geocodeAddress(fullAddress);
+      if (!deliveryLocation) {
+        // try shorter address (sometimes Nominatim/Geoapify needs different phrasing)
+        deliveryLocation = await geocodeAddress(shortAddress);
+      }
     } catch (gErr) {
+      console.warn("Geocode attempts failed, continuing without coordinates:", gErr);
       deliveryLocation = null;
     }
+
+    const formattedAddress = [
+      addressInfo.address,
+      addressInfo.city,
+      addressInfo.pincode ? addressInfo.pincode : "",
+      `Phone: ${addressInfo.phone || ""}`,
+      `Notes: ${addressInfo.notes || "None"}`,
+    ].filter(Boolean).join("\n");
 
     const newOrder = await Order.create({
       customerId,
       items: formattedItems,
       totalAmount,
       deliveryAddress: formattedAddress,
-      deliveryLocation,
+      deliveryLocation: deliveryLocation || null,
       status: "pending",
       paymentStatus: "unpaid",
       deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
     });
-
-    // If you want events only when admin approves, keep this commented-out.
-    // (We intentionally do NOT create calendar events here; admin approval will create them.)
-    //
-    // if (deliveryDate) {
-    //   try {
-    //     await createEventForOrder(newOrder);
-    //   } catch (calErr) {
-    //     console.error("Google Calendar createEventForOrder error:", calErr);
-    //   }
-    // }
 
     return res.status(201).json({
       success: true,
@@ -255,7 +273,8 @@ export const getBookedDeliveryDates = async (req, res) => {
   }
 };
 
-//MarkOrderDelivered
+// MarkOrderDelivered
+// markOrderDelivered (idempotent wrapper)
 export const markOrderDelivered = async (req, res) => {
   const { orderId } = req.params;
   const deliveredItems = Array.isArray(req.body?.items) ? req.body.items : null;
@@ -264,181 +283,56 @@ export const markOrderDelivered = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid order id" });
   }
 
-  let session = null;
   try {
-    // Load order (not lean because we may later update)
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
-
-    // Build itemsToProcess: array of { productId, qtyRequested, orderItemIndex }
-    const itemsToProcess = [];
-
-    if (deliveredItems && deliveredItems.length > 0) {
-      // If frontend supplied explicit delivered items (best)
-      for (const it of deliveredItems) {
-        if (!it?.productId || !mongoose.Types.ObjectId.isValid(it.productId)) continue;
-        const qty = Number(it.qtyDelivered ?? it.qty ?? it.quantity ?? 0);
-        if (qty > 0) itemsToProcess.push({ productId: it.productId.toString(), qtyRequested: qty });
-      }
-    } else {
-      // No explicit delivered items supplied: compute remaining per order item
-      for (const it of order.items) {
-        const orderedQty = Number(it.quantity ?? it.qty ?? 0);
-        const prevDelivered = Number(it.deliveredQty ?? 0);
-        const remaining = Math.max(0, orderedQty - prevDelivered);
-        if (remaining <= 0) continue;
-
-        // If productId exists, use it
-        if (it.productId && mongoose.Types.ObjectId.isValid(it.productId)) {
-          itemsToProcess.push({ productId: it.productId.toString(), qtyRequested: remaining });
-        } else {
-          // TRY to resolve by product name (best-effort for old orders)
-          if (it.productName) {
-            const product = await Product.findOne({
-              $or: [{ name: it.productName }, { title: it.productName }, { productName: it.productName }],
-            }).lean();
-
-            if (product && product._id) {
-              itemsToProcess.push({ productId: product._id.toString(), qtyRequested: remaining });
-            } else {
-              // If cannot resolve, skip this item but log
-              console.warn(`markOrderDelivered: cannot resolve product for order ${orderId} item name="${it.productName}"`);
-            }
-          } else {
-            console.warn(`markOrderDelivered: order ${orderId} has item without productId or productName, skipping`);
-          }
-        }
-      }
+    // Build itemsArray to pass to processDelivery (if provided)
+    let itemsArray = null;
+    if (Array.isArray(deliveredItems) && deliveredItems.length > 0) {
+      itemsArray = deliveredItems.map((it) => ({
+        productId: it.productId ? String(it.productId) : null,
+        productName: it.productName || null,
+        qtyDelivered: Number(it.qtyDelivered ?? it.qty ?? it.quantity ?? 0),
+      }));
     }
 
-    if (itemsToProcess.length === 0) {
-      // nothing to do
-      return res.status(400).json({ success: false, message: "No deliverable items provided or remaining" });
-    }
-
-    // Try to start a session/transaction (works if replica set enabled)
     try {
-      session = await mongoose.startSession();
-      session.startTransaction();
-    } catch (txErr) {
-      session = null; // proceed without transaction if not supported
-    }
+      const result = await processDelivery(orderId, itemsArray);
+      // return updated order to client
+      const freshOrder = await Order.findById(orderId).lean();
+      return res.status(200).json({ success: true, message: "Delivery recorded", order: freshOrder, result });
+    } catch (procErr) {
+      const msg = String(procErr?.message || "").toLowerCase();
 
-    // Process each item
-    for (const it of itemsToProcess) {
-      const pid = it.productId;
-      const qtyReq = Number(it.qtyRequested || 0);
-      if (!pid || qtyReq <= 0) continue;
+      // If processDelivery says "No deliverable items provided" -> idempotent success
+      if (msg.includes("no deliverable") || msg.includes("no deliverable items")) {
+        const order = await Order.findById(orderId);
+        if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-      // Find order item to compute remaining (match by productId OR productName fallback)
-      const orderItem = order.items.find((oi) => {
-        if (oi.productId && oi.productId.toString() === pid) return true;
-        if (!oi.productId && oi.productName) {
-          // If item had no productId but name matched a resolved product, match by name
-          // (we matched it earlier via Product.findOne). Use string compare.
-          return false; // skip here (we already mapped to product) - will update by productId query
+        // ensure status/paymentStatus consistent if needed
+        if (order.status !== "completed") {
+          order.status = "completed";
         }
-        return false;
-      });
+        if (!order.paymentStatus || String(order.paymentStatus).toLowerCase() !== "paid") {
+          order.paymentStatus = "paid";
+        }
+        await order.save();
 
-      // If orderItem not found by productId in order.items (because original item had no productId),
-      // we will still update product stock and then increment deliveredQty for the item using positional operator by matching productId (best-effort)
-      const prevDelivered = Number(orderItem?.deliveredQty ?? 0);
-      const orderedQty = Number(orderItem?.quantity ?? orderItem?.qty ?? 0);
-      const remaining = Math.max(0, (orderedQty || 0) - (prevDelivered || 0));
-      const deliverable = Math.max(0, Math.min(remaining || qtyReq, qtyReq));
-      if (deliverable <= 0) continue;
-
-      // 1) decrement product stock atomically
-      const updatedProduct = await Product.findByIdAndUpdate(
-        pid,
-        { $inc: { stock: -deliverable } },
-        { new: true, session }
-      );
-
-      if (!updatedProduct) {
-        if (session) { await session.abortTransaction(); session.endSession(); }
-        return res.status(404).json({ success: false, message: `Product ${pid} not found` });
+        const fresh = await Order.findById(orderId).lean();
+        return res.status(200).json({
+          success: true,
+          message: "Order already fully delivered (idempotent)",
+          order: fresh,
+        });
       }
 
-      if (typeof updatedProduct.stock === "number" && updatedProduct.stock < 0) {
-        // revert decrement and abort
-        await Product.findByIdAndUpdate(pid, { $inc: { stock: deliverable } }, { session });
-        if (session) { await session.abortTransaction(); session.endSession(); }
-        return res.status(400).json({ success: false, message: `Insufficient stock for product ${pid}` });
-      }
-
-      // 2) increment order item's deliveredQty
-      // Try positional update (items.$) for item with productId
-      const updateRes = await Order.updateOne(
-        { _id: orderId, "items.productId": pid },
-        {
-          $inc: { "items.$.deliveredQty": deliverable },
-          $set: { updatedAt: new Date() },
-        },
-        { session }
-      );
-
-      // If no positional update matched (happens when original order.items lacked productId),
-      // attempt to match by productName and increment deliveredQty on the first item that has that name and has remaining quantity
-      if (updateRes.matchedCount === 0) {
-        // find index of the item with the same productName and remaining qty
-        const orderDoc = await Order.findById(orderId).session(session);
-        let updated = false;
-        for (let idx = 0; idx < orderDoc.items.length; idx++) {
-          const oi = orderDoc.items[idx];
-          const ordered = Number(oi.quantity ?? oi.qty ?? 0);
-          const prevDel = Number(oi.deliveredQty ?? 0);
-          if ((oi.productId && oi.productId.toString() === pid) || (!oi.productId && oi.productName)) {
-            // match either productId or same name (best-effort)
-            const rem = Math.max(0, ordered - prevDel);
-            if (rem > 0) {
-              // update specific array index
-              const incObj = {};
-              incObj[`items.${idx}.deliveredQty`] = deliverable;
-              await Order.updateOne({ _id: orderId }, { $inc: incObj, $set: { updatedAt: new Date() } }, { session });
-              updated = true;
-              break;
-            }
-          }
-        }
-        if (!updated) {
-          // nothing updated — continue
-          console.warn(`markOrderDelivered: could not increment deliveredQty for product ${pid} on order ${orderId}`);
-        }
-      }
+      console.error("markOrderDelivered -> processDelivery failed:", procErr);
+      return res.status(500).json({ success: false, message: "Failed to record delivery", error: procErr.message || String(procErr) });
     }
-
-    // After processing all items, check if order is fully delivered
-    const freshOrder = await Order.findById(orderId).session(session);
-    const allDelivered = freshOrder.items.every((it) => (Number(it.deliveredQty ?? 0) >= Number(it.quantity ?? it.qty ?? 0)));
-
-    if (allDelivered) {
-      freshOrder.status = "completed";
-      await freshOrder.save({ session });
-    } else {
-      await freshOrder.save({ session: session });
-    }
-
-    if (session) {
-      await session.commitTransaction();
-      session.endSession();
-    }
-
-    return res.status(200).json({ success: true, message: "Delivery recorded" });
   } catch (err) {
     console.error("markOrderDelivered error:", err);
-    if (session) {
-      try {
-        await session.abortTransaction();
-        session.endSession();
-      } catch (e) {
-        // ignore
-      }
-    }
-    return res.status(500).json({ success: false, message: "Failed to record delivery", error: err.message || err });
+    return res.status(500).json({ success: false, message: "Failed to record delivery", error: err.message || String(err) });
   }
 };
+
 
 /* ---------------------------------------------
   updateOrderStatus: update status; if status === 'completed' then process delivery
@@ -457,15 +351,14 @@ export const updateOrderStatus = async (req, res) => {
 
     if (status === "completed") {
       try {
-        await processDelivery(orderId, null); // deliver remaining
-        return res.status(200).json({ success: true, message: "Order marked completed and delivery recorded" });
+        const proc = await processDelivery(orderId, null); // deliver remaining
+        return res.status(200).json({ success: true, message: "Order marked completed and delivery recorded", proc });
       } catch (procErr) {
         console.error("updateOrderStatus -> processDelivery failed:", procErr);
         return res.status(500).json({ success: false, message: procErr.message || "Failed to process delivery" });
       }
     }
 
-    // other statuses
     order.status = status;
     await order.save();
     return res.status(200).json({ success: true, message: "Status updated", order });
@@ -476,10 +369,7 @@ export const updateOrderStatus = async (req, res) => {
 };
 
 /* ---------------------------------------------
-  NEW: approveAndAssignDriver
-  - Called by admin when approving + assigning a driver.
-  - Sets driverId, status='accepted', saves order.
-  - Attempts to create Google Calendar event (non-fatal).
+  approveAndAssignDriver
 ----------------------------------------------*/
 export const approveAndAssignDriver = async (req, res) => {
   try {
@@ -494,14 +384,12 @@ export const approveAndAssignDriver = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-    // assign driver and accept order
     order.driverId = driverId;
     order.status = "accepted";
     order.updatedAt = new Date();
 
     await order.save();
 
-    // TRY to create calendar event — don't block approve flow if calendar fails
     try {
       console.log(`approveAndAssignDriver: order ${order._id} accepted — attempting to create calendar event`);
       const event = await createEventForOrder(order);
@@ -514,7 +402,6 @@ export const approveAndAssignDriver = async (req, res) => {
       console.error("approveAndAssignDriver: createEventForOrder error:", calErr);
     }
 
-    // return updated order (lean simple)
     return res.status(200).json({ message: "Order approved and assigned to driver", order });
   } catch (err) {
     console.error("approveAndAssignDriver error:", err);

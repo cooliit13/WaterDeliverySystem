@@ -1,3 +1,4 @@
+// backend/src/routes/adminRoutes.js
 import express from "express";
 import {
   getAllUsers,
@@ -5,6 +6,7 @@ import {
   deleteUser,
   getAllCustomers,
   getAllDrivers,
+  updateUserRole, // <-- ADDED import
 } from "../controllers/adminController.js";
 import { createDriverAccount } from "../controllers/driverController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -27,6 +29,15 @@ const adminOnly = (req, res, next) => {
 router.get("/users", authMiddleware, adminOnly, getAllUsers);
 router.put("/users/:id/status", authMiddleware, adminOnly, updateUserStatus);
 router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
+
+// ---------- NEW: Guarded role update (first-editor-wins) ----------
+/**
+ * Accepts either PUT or PATCH to match frontend usage.
+ * Body: { role: "...", clientUpdatedAt: "<ISO string>" }
+ */
+router.put("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
+router.patch("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
+// ------------------------------------------------------------------
 
 router.get("/customers", authMiddleware, adminOnly, getAllCustomers);
 router.get("/drivers", authMiddleware, adminOnly, getAllDrivers);

@@ -1,57 +1,15 @@
 // backend/src/routes/orderRoutes.js
 import express from "express";
 import Order from "../models/order.js";
-import { markOrderDelivered } from "../controllers/orderController.js";
-import { authMiddleware } from "../middleware/authMiddleware.js"; // adjust path/name if your project uses different
+import { markOrderDelivered, requestPurchase, getDriverOrders, getBookedDeliveryDates, updateOrderStatus, approveAndAssignDriver } from "../controllers/orderController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 /* ---------------------------------------------
   CUSTOMER REQUEST PURCHASE
 ---------------------------------------------- */
-router.post("/request-purchase", async (req, res) => {
-  console.log("🔥 Incoming Request Body:", JSON.stringify(req.body, null, 2));
-  try {
-    const { userId, cartItems, totalAmount, addressInfo, deliveryDate } = req.body;
-
-    if ((!userId && !req.body.customerId) || !cartItems || !cartItems.length || !totalAmount || !addressInfo) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
-    }
-
-    const formattedItems = cartItems.map((item) => ({
-      productId: item.productId,
-      productName: item.productName || "Unknown Product",
-      quantity: item.quantity,
-      price: item.price,
-      deliveredQty: 0,
-    }));
-
-    const formattedAddress = `
-${addressInfo.address}, 
-${addressInfo.city}, 
-${addressInfo.pincode}
-Phone: ${addressInfo.phone}
-Notes: ${addressInfo.notes || "None"}
-`.trim();
-
-    const customerId = req.body.customerId || userId;
-
-    const newOrder = await Order.create({
-      customerId,
-      items: formattedItems,
-      totalAmount,
-      deliveryAddress: formattedAddress,
-      status: "pending",
-      paymentStatus: "unpaid",
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
-    });
-
-    return res.status(201).json({ success: true, message: "Purchase request successfully submitted", order: newOrder });
-  } catch (err) {
-    console.error("Request purchase error:", err);
-    return res.status(500).json({ success: false, message: "Server error. Failed to submit purchase request." });
-  }
-});
+router.post("/request-purchase", requestPurchase);
 
 /* ---------------------------------------------
   ADMIN: GET ALL PENDING ORDERS
@@ -59,10 +17,10 @@ Notes: ${addressInfo.notes || "None"}
 router.get("/pending", async (req, res) => {
   try {
     const orders = await Order.find({ status: "pending" }).sort({ createdAt: -1 });
-    res.json({ success: true, orders });
+    return res.json({ success: true, orders });
   } catch (err) {
     console.error("Pending orders error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -80,10 +38,10 @@ router.put("/admin/orders/approve", async (req, res) => {
     order.assignedAt = new Date();
 
     await order.save();
-    res.json({ success: true, message: "Order approved and assigned to driver", order });
+    return res.json({ success: true, message: "Order approved and assigned to driver", order });
   } catch (err) {
     console.error("Approve error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -98,10 +56,10 @@ router.put("/cancel/:orderId", async (req, res) => {
     order.status = "cancelled";
     await order.save();
 
-    res.json({ success: true, message: "Order cancelled" });
+    return res.json({ success: true, message: "Order cancelled" });
   } catch (err) {
     console.error("Cancel error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -114,10 +72,10 @@ router.get("/user/:id", async (req, res) => {
       .sort({ createdAt: -1 })
       .populate({ path: "items.productId", select: "name" });
 
-    res.json({ success: true, data: orders });
+    return res.json({ success: true, data: orders });
   } catch (err) {
     console.error("User orders error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -126,12 +84,14 @@ router.get("/user/:id", async (req, res) => {
 ---------------------------------------------- */
 router.get("/details/:id", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate({ path: "items.productId", select: "name price image" });
+    const order = await Order.findById(req.params.id)
+      .populate({ path: "items.productId", select: "name price image" });
+
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
-    res.json({ success: true, data: order });
+    return res.json({ success: true, data: order });
   } catch (err) {
     console.error("Order details error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -141,10 +101,10 @@ router.get("/details/:id", async (req, res) => {
 router.get("/admin/orders/get", async (req, res) => {
   try {
     const orders = await Order.find().populate("customerId", "firstname lastname").sort({ createdAt: -1 });
-    res.json({ success: true, orders });
+    return res.json({ success: true, orders });
   } catch (err) {
     console.error("Admin get orders error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -155,10 +115,10 @@ router.get("/admin/orders/details/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id).populate("customerId", "firstname lastname");
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
-    res.json({ success: true, order });
+    return res.json({ success: true, order });
   } catch (err) {
     console.error("Admin details error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -170,10 +130,10 @@ router.put("/admin/orders/update/:id", async (req, res) => {
     const { orderStatus } = req.body;
     const updatedOrder = await Order.findByIdAndUpdate(req.params.id, { status: orderStatus }, { new: true });
     if (!updatedOrder) return res.status(404).json({ success: false, message: "Order not found" });
-    res.json({ success: true, message: "Order status updated", order: updatedOrder });
+    return res.json({ success: true, message: "Order status updated", order: updatedOrder });
   } catch (err) {
     console.error("Admin update status error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -184,29 +144,24 @@ router.get("/driver/:driverId", async (req, res) => {
   try {
     const { driverId } = req.params;
     const orders = await Order.find({ driverId, status: { $in: ["accepted", "delivering"] } })
-      .populate("customerId", "fullName email")
+      .populate("customerId", "fullName email phoneNumber profileImage")
       .sort({ deliveryDate: 1 });
-    res.status(200).json({ success: true, orders });
+    return res.status(200).json({ success: true, orders });
   } catch (err) {
     console.error("Driver orders fetch error:", err);
-    res.status(500).json({ success: false, message: "Server error fetching driver orders" });
+    return res.status(500).json({ success: false, message: "Server error fetching driver orders" });
   }
 });
 
 /* ---------------------------------------------
   USER: SUBMIT GENERAL FEEDBACK FOR ORDER (Option A)
-  Body: { productRating, productFeedback, driverRating, driverFeedback }
-  - authMiddleware required
-  - only order owner can submit
-  - only when status === 'completed'
-  - marks feedbackSubmitted = true
 ---------------------------------------------- */
 router.post("/:orderId/feedback", authMiddleware, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { productRating, productFeedback, driverRating, driverFeedback } = req.body;
 
-    // --- DEBUG: log incoming payload to help verify front-end submission shape
+    // debug log
     console.log(`[feedback] orderId=${orderId} payload=`, JSON.stringify(req.body));
 
     const userId = req.user?.id ?? req.user?._id;
@@ -256,7 +211,7 @@ router.post("/:orderId/feedback", authMiddleware, async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ADMIN: GET ALL FEEDBACKS (orders containing feedback)
+  ADMIN: GET ALL FEEDBACKS
 ---------------------------------------------- */
 router.get("/admin/feedbacks", async (req, res) => {
   try {
@@ -281,113 +236,50 @@ router.get("/admin/feedbacks", async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ADMIN: AGGREGATED PRODUCT RATINGS (GENERAL RATING OPTION A)
+  ADMIN: AGGREGATED PRODUCT / DRIVER RATINGS
+  (kept as-is — unchanged)
 ---------------------------------------------- */
 router.get("/admin/ratings/products", async (req, res) => {
   try {
     const pipeline = [
-      {
-        $match: {
-          productRating: { $exists: true, $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          avgRating: { $avg: "$productRating" },
-          ratingCount: { $sum: 1 },
-          sampleFeedbacks: { $push: "$productFeedback" }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          avgRating: { $round: ["$avgRating", 2] },
-          ratingCount: 1,
-          sampleFeedbacks: { $slice: ["$sampleFeedbacks", 10] }
-        }
-      }
+      { $match: { productRating: { $exists: true, $ne: null } } },
+      { $group: { _id: null, avgRating: { $avg: "$productRating" }, ratingCount: { $sum: 1 }, sampleFeedbacks: { $push: "$productFeedback" } } },
+      { $project: { _id: 0, avgRating: { $round: ["$avgRating", 2] }, ratingCount: 1, sampleFeedbacks: { $slice: ["$sampleFeedbacks", 10] } } }
     ];
-
     const results = await Order.aggregate(pipeline).allowDiskUse(true);
-    res.json({ success: true, data: results });
+    return res.json({ success: true, data: results });
   } catch (err) {
     console.error("Admin product ratings error:", err);
-    res.status(500).json({ success: false, message: "Server error fetching product ratings" });
+    return res.status(500).json({ success: false, message: "Server error fetching product ratings" });
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: AGGREGATED DRIVER RATINGS (improved name detection)
----------------------------------------------- */
 router.get("/admin/ratings/drivers", async (req, res) => {
   try {
     const pipeline = [
       { $match: { driverRating: { $exists: true, $ne: null } } },
-      {
-        $group: {
-          _id: "$driverId",
-          avgRating: { $avg: "$driverRating" },
-          ratingCount: { $sum: 1 },
-          sampleDriverFeedbacks: { $push: "$driverFeedback" },
-        },
-      },
-      // Lookup driver details from users collection
-      {
-        $lookup: {
-          from: "users",
-          localField: "_id",
-          foreignField: "_id",
-          as: "driver",
-        },
-      },
+      { $group: { _id: "$driverId", avgRating: { $avg: "$driverRating" }, ratingCount: { $sum: 1 }, sampleDriverFeedbacks: { $push: "$driverFeedback" } } },
+      { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "driver" } },
       { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
-      // build the driverName from multiple possible fields
-      {
-        $project: {
+      { $project: {
           driverId: "$_id",
-          driverName: {
-            $trim: {
-              input: {
-                $concat: [
-                  { $ifNull: ["$driver.firstname", ""] },
-                  " ",
-                  { $ifNull: ["$driver.lastname", ""] }
-                ]
-              }
-            }
-          },
-          // fallback name candidates
-          driverAltName: {
-            $ifNull: [
-              "$driver.fullName",
-              { $ifNull: ["$driver.name", "$driver.email"] }
-            ]
-          },
+          driverName: { $trim: { input: { $concat: [{ $ifNull: ["$driver.firstname", ""]}, " ", { $ifNull: ["$driver.lastname", ""] }] } } },
+          driverAltName: { $ifNull: ["$driver.fullName", { $ifNull: ["$driver.name", "$driver.email"] }] },
           avgRating: { $round: ["$avgRating", 2] },
           ratingCount: 1,
-          sampleDriverFeedbacks: { $slice: ["$sampleDriverFeedbacks", 5] },
-        },
+          sampleDriverFeedbacks: { $slice: ["$sampleDriverFeedbacks", 5] }
+        }
       },
-      // final project: prefer driverName (firstname+lastname) else driverAltName else "Unknown Driver"
-      {
-        $project: {
+      { $project: {
           driverId: 1,
-          driverName: {
-            $cond: [
-              { $and: [{ $ne: ["$driverName", ""] }, { $ne: ["$driverName", null] }] },
-              "$driverName",
-              { $ifNull: ["$driverAltName", "Unknown Driver"] }
-            ]
-          },
+          driverName: { $cond: [ { $and: [{ $ne: ["$driverName", ""] }, { $ne: ["$driverName", null] }] }, "$driverName", { $ifNull: ["$driverAltName", "Unknown Driver"] } ] },
           avgRating: 1,
           ratingCount: 1,
-          sampleDriverFeedbacks: 1,
-        },
+          sampleDriverFeedbacks: 1
+        }
       },
       { $sort: { avgRating: -1, ratingCount: -1 } },
     ];
-
     const results = await Order.aggregate(pipeline).allowDiskUse(true);
     return res.json({ success: true, data: results });
   } catch (err) {
@@ -397,7 +289,7 @@ router.get("/admin/ratings/drivers", async (req, res) => {
 });
 
 /* ---------------------------------------------
-  ✅ DRIVER or ADMIN — MARK ORDER AS DELIVERED
+  DRIVER or ADMIN — MARK ORDER AS DELIVERED
 ---------------------------------------------- */
 router.put("/:orderId/deliver", markOrderDelivered);
 

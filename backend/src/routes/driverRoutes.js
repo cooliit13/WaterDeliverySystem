@@ -1,7 +1,9 @@
+// routes/driverRoutes.js
 import express from "express";
 import multer from "multer";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
+// driver handlers
 import {
   registerDriver,
   loginDriver,
@@ -9,8 +11,12 @@ import {
   updateDriverProfile,
   getAssignedOrders,
   updateDeliveryStatus,
-  uploadProofOfDelivery
+  uploadProofOfDelivery,
+  getAllDriversAdmin,
 } from "../controllers/driverController.js";
+
+// markOrderDelivered lives in orderController (reused by driver)
+import { markOrderDelivered } from "../controllers/orderController.js";
 
 const router = express.Router();
 
@@ -40,5 +46,11 @@ router.post(
   upload.single("proof"),
   uploadProofOfDelivery
 );
+
+/* DRIVER marks as delivered (uploads handled separately by /proof flow) */
+router.put("/orders/:orderId/deliver", authMiddleware, markOrderDelivered);
+
+/* ADMIN: list drivers (no RBAC check; authMiddleware still applied) */
+router.get("/admin/drivers", authMiddleware, getAllDriversAdmin);
 
 export default router;

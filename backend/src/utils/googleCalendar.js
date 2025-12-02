@@ -194,14 +194,28 @@ export async function createEventForOrder(order) {
     location: order.deliveryAddress || "",
   };
 
-  try {
+    try {
     const res = await appCalendar.events.insert({
       calendarId,
       requestBody: event,
     });
     return res.data;
   } catch (err) {
-    console.error("createEventForOrder: calendar API error:", err?.message || err);
+    // Improve logging so we can see when the refresh token is invalid
+    const message = err?.message || String(err);
+    console.error("createEventForOrder: calendar API error:", message);
+
+    // If Google returned an OAuth error (invalid_grant) warn with actionable message
+    const errCode = err?.response?.data?.error;
+    const errDesc = err?.response?.data?.error_description;
+    if (errCode === "invalid_grant" || (message && message.includes("invalid_grant"))) {
+      console.error("createEventForOrder: OAuth issue detected (invalid_grant). This means the refresh token used by the app has been revoked or expired.");
+      console.error("-> Re-authorize the Google account to obtain a new refresh token and update GOOGLE_CALENDAR_REFRESH_TOKEN in your .env.");
+    } else {
+      console.error("createEventForOrder: calendar insertion failed - see error details above.");
+    }
+
+    // Re-throw so callers that rely on thrown errors still receive it OR return null if you want non-fatal:
     throw err;
   }
 }

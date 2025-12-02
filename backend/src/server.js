@@ -24,6 +24,7 @@ import adminRatingsRouter from "./routes/AdminRatings.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
 import http from "http";
 import { Server as IOServer } from "socket.io";
+import adminBackupRoutes from "./routes/adminBackupRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -47,11 +48,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 //  API Routes
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);               // only once
 app.use("/api/admin", adminRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/auth", authRoutes);
 app.use("/api/admin/products", productRoutes);
 app.use("/api/shop/products", productRoutes);
 app.use("/uploads", express.static("uploads"));
@@ -59,25 +59,26 @@ app.use("/api/common", commonRoutes);
 app.use("/api/shop/cart", cartRoutes);
 app.use("/api/shop/address", addressRoutes);
 app.use("/api/orders", orderRoutes);
-app.use("/api/driver", driverRoutes);
+app.use("/api/driver", driverRoutes);           // driver-related routes
 app.use('/api/google', calendarRoutes);
 app.use("/api/calendar", calendarRoutes);
-app.use("/api/driver", deliveryRoutes);
+app.use("/api/delivery", deliveryRoutes);       // << mounted at /api/delivery to avoid shadowing
 app.use("/api/admin/pos", posRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admin/products", productStockRoutes);
 app.use("/api/admin/ratings", adminRatingsRouter);
 app.use("/api/admin", adminUserRoutes);
+app.use("/api/admin/backup", adminBackupRoutes);
+
 // Test endpoint to verify backend connectivity
 app.get("/api/test", (req, res) => {
   res.json({ message: "✅ Backend is running and reachable from frontend!" });
 });
 
-// ---------- Socket.IO setup (minimal, added) ----------
+// ---------- Socket.IO setup (minimal) ----------
 const PORT = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
 
-// Create socket.io server, allow same frontend origin
 const io = new IOServer(httpServer, {
   cors: {
     origin: "http://localhost:5173",
@@ -90,7 +91,6 @@ const io = new IOServer(httpServer, {
 const userSockets = new Map();
 
 io.on("connection", (socket) => {
-  // simple identify: client emits 'identify' with userId after connect
   socket.on("identify", (userId) => {
     if (!userId) return;
     socket.userId = String(userId);
@@ -99,7 +99,6 @@ io.on("connection", (socket) => {
     userSockets.set(socket.userId, prev);
   });
 
-  // allow a client to join a specific order room (optional)
   socket.on("joinOrderRoom", (orderId) => {
     if (!orderId) return;
     socket.join(`order_${orderId}`);
@@ -115,8 +114,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Helper route (lightweight) to notify user about order status updates.
-// Minimal: accepts { orderId, status, userId, extra } and emits "order:status:update"
+// Helper route to notify user about order status updates.
 app.post("/api/admin/orders/notify", (req, res) => {
   try {
     const { orderId, status, userId, extra } = req.body;
@@ -131,7 +129,6 @@ app.post("/api/admin/orders/notify", (req, res) => {
       ...(extra || {}),
     };
 
-    // Emit to all sockets for that user
     const sidSet = userSockets.get(String(userId));
     if (sidSet) {
       for (const sid of sidSet) {
@@ -139,7 +136,6 @@ app.post("/api/admin/orders/notify", (req, res) => {
       }
     }
 
-    // Also emit to a room named for the order (optional)
     io.to(`order_${orderId}`).emit("order:status:update", payload);
 
     return res.json({ success: true, emittedTo: sidSet ? Array.from(sidSet) : [], payload });
@@ -150,5 +146,36 @@ app.post("/api/admin/orders/notify", (req, res) => {
 });
 // ---------- end Socket.IO setup ----------
 
-//  Start Server (use httpServer for socket.io)
+// DEBUG: list registered routes (helps find 404 / path typos)
+function listRoutes() {
+  try {
+    const routes = [];
+    if (!app._router) {
+      console.log('No routes registered yet.');
+      return;
+    }
+    app._router.stack.forEach(mw => {
+      if (mw.route) {
+        // direct route
+        const methods = Object.keys(mw.route.methods).join(',').toUpperCase();
+        routes.push(`${methods} ${mw.route.path}`);
+      } else if (mw.name === 'router' && mw.handle && mw.handle.stack) {
+        // router middleware
+        mw.handle.stack.forEach(r => {
+          if (r.route && r.route.path) {
+            const methods = Object.keys(r.route.methods).join(',').toUpperCase();
+            // Prefix path with parent path if available (Express doesn't expose parent mount path easily here)
+            routes.push(`${methods} ${r.route.path}`);
+          }
+        });
+      }
+    });
+    console.log('📚 Registered routes:\n' + routes.join('\n'));
+  } catch (err) {
+    console.error('Error listing routes:', err);
+  }
+}
+
+listRoutes();
+
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

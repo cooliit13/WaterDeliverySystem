@@ -11,25 +11,29 @@ function InventoryView() {
   const [actionType, setActionType] = useState("");
   const [amount, setAmount] = useState("");
 
+  // EDIT modal state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editValues, setEditValues] = useState({ title: "", price: "", description: "" });
+  const [editLoading, setEditLoading] = useState(false);
+
   // POS
   const [posSales, setPosSales] = useState([]);
   const [posLoading, setPosLoading] = useState(false);
 
   const { toast } = useToast();
 
-  // base axios config helper
   const authHeaders = () => {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Fetch products from backend
   const fetchProducts = async () => {
     try {
       const res = await axios.get("http://localhost:5000/api/admin/products/get-all", {
         headers: authHeaders(),
       });
       setProducts(res.data?.products ?? []);
+      console.log("fetchProducts -> loaded", (res.data?.products ?? []).length, "products");
     } catch (err) {
       console.error("Failed to fetch products", err);
       toast({ title: "Failed to fetch products", variant: "destructive" });
@@ -64,43 +68,59 @@ function InventoryView() {
     setModalOpen(true);
   }
 
-  const applyStockChange = async () => {
-    if (!amount || Number(amount) <= 0) {
-      toast({ title: "Enter a valid amount", variant: "destructive" });
-      return;
+  // in src/pages/admin-view/InventoryPage.jsx -> replace applyStockChange with this
+const applyStockChange = async () => {
+  if (!amount || Number(amount) <= 0) {
+    toast({ title: "Enter a valid amount", variant: "destructive" });
+    return;
+  }
+  if (!currentProduct) return;
+
+  const delta = actionType === "Add" ? Math.abs(Number(amount)) : -Math.abs(Number(amount));
+  const currentStock = Number(currentProduct.stock ?? 0);
+  const newStock = currentStock + delta;
+  if (newStock < 0) {
+    toast({ title: "Resulting stock cannot be negative", variant: "destructive" });
+    return;
+  }
+
+  // Prepare guarded payload using exact updatedAt string from server
+  const payload = {
+    newStock,
+    clientUpdatedAt: currentProduct.updatedAt, // exact raw string
+  };
+
+  try {
+    console.log("applyStockChange (guarded) -> payload:", payload);
+    const res = await axios.post(
+      `http://localhost:5000/api/admin/products/${currentProduct._id}/stock`,
+      payload,
+      { headers: { ...authHeaders(), "Content-Type": "application/json" } }
+    );
+
+    if (res.data?.success) {
+      toast({ title: "Stock updated" });
+      setModalOpen(false);
+      setCurrentProduct(null);
+      fetchProducts();
+    } else {
+      toast({ title: res.data?.message || "Failed to update stock", variant: "destructive" });
     }
-    if (!currentProduct) return;
-
-    const currentStock = Number(currentProduct.stock ?? 0);
-    let newStock = currentStock;
-    if (actionType === "Add") newStock = currentStock + Number(amount);
-    if (actionType === "Deduct") newStock = currentStock - Number(amount);
-
-    if (newStock < 0) {
-      toast({ title: "Stock cannot be negative", variant: "destructive" });
-      return;
-    }
-
-    try {
-      const res = await axios.put(
-        `http://localhost:5000/api/admin/products/stock/${currentProduct._id}`,
-        { stock: newStock },
-        { headers: { ...authHeaders(), "Content-Type": "application/json" } }
-      );
-
-      if (res.data?.success) {
-        toast({ title: "Stock updated" });
-        setModalOpen(false);
-        setCurrentProduct(null);
-        fetchProducts();
-      } else {
-        toast({ title: res.data?.message || "Failed to update stock", variant: "destructive" });
-      }
-    } catch (err) {
-      console.error("Update stock error:", err);
+  } catch (err) {
+    console.error("Guarded update stock error:", err);
+    if (err.response?.status === 409 && err.response.data?.product) {
+      // conflict: server returned current product; update local and inform admin
+      const latest = err.response.data.product;
+      setProducts((prev) => prev.map((p) => (p._id === latest._id ? latest : p)));
+      setCurrentProduct(latest);
+      toast({ title: "Conflict: product not changed. Form updated with latest values.", variant: "destructive" });
+    } else if (err.response?.data?.message) {
+      toast({ title: err.response.data.message, variant: "destructive" });
+    } else {
       toast({ title: "Failed to update stock", variant: "destructive" });
     }
-  };
+  }
+};
 
   const deleteProduct = async (id) => {
     if (!confirm("Delete this product?")) return;
@@ -108,6 +128,7 @@ function InventoryView() {
       const res = await axios.delete(`http://localhost:5000/api/admin/products/delete/${id}`, {
         headers: authHeaders(),
       });
+      console.log("deleteProduct -> response", res.status, res.data);
       if (res.data?.success) {
         toast({ title: "Product deleted" });
         fetchProducts();
@@ -119,6 +140,81 @@ function InventoryView() {
       toast({ title: "Delete failed", variant: "destructive" });
     }
   };
+
+  // Edit flow (timestamp-aware)
+  function openEditModal(product) {
+    setCurrentProduct(product);
+    setEditValues({
+      title: product.title ?? product.name ?? "",
+      price: product.price ?? "",
+      description: product.description ?? "",
+    });
+    setEditOpen(true);
+    console.log("openEditModal -> product opened for edit:", product._id, "updatedAt:", product.updatedAt);
+  }
+
+  async function submitEdit() {
+    if (!currentProduct) return;
+    setEditLoading(true);
+
+    try {
+      // IMPORTANT: send the exact updatedAt string that came from the server
+      const payload = {
+        title: editValues.title,
+        price: editValues.price,
+        description: editValues.description,
+        clientUpdatedAt: currentProduct.updatedAt,
+      };
+
+      // Debug log so you can see what frontend will send
+      console.log(">>> SUBMIT EDIT payload:", JSON.stringify(payload));
+
+      const res = await axios.put(
+        `http://localhost:5000/api/admin/products/edit/${currentProduct._id}`,
+        payload,
+        { headers: { ...authHeaders(), "Content-Type": "application/json" } }
+      );
+
+      console.log("submitEdit -> response", res.status, res.data);
+
+      if (res.data?.success) {
+        toast({ title: "Product updated" });
+        setEditOpen(false);
+        setCurrentProduct(null);
+        fetchProducts();
+      } else {
+        toast({ title: res.data?.message || "Update failed", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error("Edit product error:", err);
+
+      if (err.response?.status === 409 && err.response.data?.product) {
+        toast({
+          title: "Conflict: product changed since you opened it",
+          variant: "destructive",
+        });
+
+        const latest = err.response.data.product;
+        setProducts((prev) => prev.map((p) => (p._id === latest._id ? latest : p)));
+
+        setCurrentProduct(latest);
+        setEditValues({
+          title: latest.title ?? latest.name ?? "",
+          price: latest.price ?? "",
+          description: latest.description ?? "",
+        });
+
+        console.log("submitEdit -> conflict, replaced with latest:", latest._id, "updatedAt:", latest.updatedAt);
+      } else if (err.response?.status === 400 && err.response?.data?.message) {
+        toast({ title: err.response.data.message, variant: "destructive" });
+        console.warn("submitEdit -> 400 response:", err.response.data);
+      } else {
+        toast({ title: "Failed to update product", variant: "destructive" });
+      }
+    } finally {
+      setEditLoading(false);
+    }
+  }
 
   return (
     <div className="p-6 space-y-10">
@@ -144,6 +240,7 @@ function InventoryView() {
                   <div className="flex gap-2">
                     <Button onClick={() => openStockModal(p, "Add")}>+ Add Stock</Button>
                     <Button onClick={() => openStockModal(p, "Deduct")}>- Deduct Stock</Button>
+                    <Button onClick={() => openEditModal(p)}>Edit</Button>
                     <Button variant="destructive" onClick={() => deleteProduct(p._id)}>
                       Delete
                     </Button>
@@ -155,7 +252,13 @@ function InventoryView() {
                   <div className="mt-2 text-sm text-gray-700">
                     <div><strong>ID:</strong> {p._id}</div>
                     <div><strong>Description:</strong> {p.description ?? "—"}</div>
-                    <div><strong>Created:</strong> {new Date(p.createdAt).toLocaleString()}</div>
+                    <div><strong>Created:</strong> {p.createdAt ? new Date(p.createdAt).toLocaleString() : "—"}</div>
+
+                    {/* Minimal concurrency visibility */}
+                    <div className="mt-2 text-xs text-gray-500">
+                      <div><strong>__v (version):</strong> {p.__v ?? "—"}</div>
+                      <div><strong>updatedAt:</strong> {p.updatedAt ? new Date(p.updatedAt).toLocaleString() : "—"}</div>
+                    </div>
                   </div>
                 </details>
               </li>
@@ -164,7 +267,52 @@ function InventoryView() {
         )}
       </div>
 
-      {/* MODAL */}
+      {/* EDIT MODAL */}
+      {editOpen && currentProduct && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-[460px] shadow-xl">
+            <h3 className="text-lg font-bold mb-3">Edit Product — {currentProduct._id}</h3>
+
+            <label className="text-sm">Title</label>
+            <input
+              className="w-full border p-2 rounded mb-2"
+              value={editValues.title}
+              onChange={(e) => setEditValues((s) => ({ ...s, title: e.target.value }))}
+            />
+
+            <label className="text-sm">Price</label>
+            <input
+              type="number"
+              className="w-full border p-2 rounded mb-2"
+              value={editValues.price}
+              onChange={(e) => setEditValues((s) => ({ ...s, price: e.target.value }))}
+            />
+
+            <label className="text-sm">Description</label>
+            <textarea
+              className="w-full border p-2 rounded mb-3"
+              rows={3}
+              value={editValues.description}
+              onChange={(e) => setEditValues((s) => ({ ...s, description: e.target.value }))}
+            />
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => { setEditOpen(false); setCurrentProduct(null); }}>
+                Cancel
+              </Button>
+              <Button onClick={submitEdit} disabled={editLoading}>
+                {editLoading ? "Saving…" : "Save"}
+              </Button>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500">
+              <div><strong>Timestamp (sent on save):</strong> {currentProduct.updatedAt ?? "—"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STOCK MODAL */}
       {modalOpen && currentProduct && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white/20 backdrop-blur-xl border border-white/30 p-6 rounded-xl w-80 text-center shadow-xl">

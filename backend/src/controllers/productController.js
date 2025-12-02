@@ -2,6 +2,7 @@
 import Product from "../models/Product.js";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
+import streamifier from "streamifier";
 
 dotenv.config();
 
@@ -15,17 +16,17 @@ cloudinary.config({
 // Helper: Upload buffer to Cloudinary
 const uploadBufferToCloudinary = (buffer, options = {}) => {
   return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+    const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
       if (error) return reject(error);
       resolve(result);
     });
-    stream.end(buffer);
+    streamifier.createReadStream(buffer).pipe(uploadStream);
   });
 };
 
 // -------------------- CONTROLLERS --------------------
 
-// Admin: Get all products (for customer view)
+// Admin: Get all products (for admin)
 export const getAllProducts = async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -36,7 +37,7 @@ export const getAllProducts = async (req, res) => {
   }
 };
 
-// Admin: Get products (protected)
+// Admin: Get products (protected / maybe used elsewhere)
 export const getProducts = async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -50,8 +51,6 @@ export const getProducts = async (req, res) => {
 // Upload image controller
 export const uploadImage = async (req, res) => {
   try {
-    console.log("uploadImage called. req.file:", !!req.file);
-
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ success: false, message: "No file uploaded" });
     }
@@ -68,35 +67,36 @@ export const uploadImage = async (req, res) => {
   }
 };
 
-// Admin: Create product
+// Admin: Create product (basic duplicate-check handling)
 export const createProduct = async (req, res) => {
   try {
-    console.log("createProduct called. req.file:", !!req.file, "req.body:", req.body);
-
     if (req.file && req.file.buffer) {
       try {
         const uploadRes = await uploadBufferToCloudinary(req.file.buffer, { folder: "products" });
         req.body.image = uploadRes.secure_url || uploadRes.url;
       } catch (uploadErr) {
-        // Minimal: don't let Cloudinary failure abort the entire request
         console.error("Cloudinary upload failed in createProduct (continuing without image):", uploadErr);
         req.body.image = req.body.image || null;
       }
     }
 
-    // Minimal mapping so Mongoose schema (which expects `name`) passes
     if (req.body.title && !req.body.name) {
       req.body.name = req.body.title;
     }
 
     const { name, title, description, price, averageReview, image } = req.body;
 
-    // require name (mapped from title) and price
     if (!name || !price) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: name (or title) and price are required",
       });
+    }
+
+    // optional: check duplicate by name (helps avoid accidental duplicates)
+    const existing = await Product.findOne({ name });
+    if (existing) {
+      return res.status(409).json({ success: false, message: "Product already exists", product: existing });
     }
 
     const newProduct = new Product({
@@ -113,7 +113,10 @@ export const createProduct = async (req, res) => {
 
     return res.status(201).json({ success: true, product: newProduct });
   } catch (err) {
-    console.error("createProduct error (full):", err);
+    console.error("createProduct error:", err);
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "Product already exists (duplicate key)" });
+    }
     return res.status(500).json({
       success: false,
       message: "Failed to create product",
@@ -122,37 +125,70 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// Admin: Edit product
+
 export const editProduct = async (req, res) => {
   try {
     const id = req.params.id;
-    console.log("editProduct called. id:", id, "hasFile:", !!req.file, "body:", req.body);
+    const clientUpdatedAt = req.body?.clientUpdatedAt; // expected ISO string
+    console.log(">>> editProduct invoked for id:", id);
+    console.log(">>> raw req.body:", JSON.stringify(req.body));
 
-    if (req.file && req.file.buffer) {
-      try {
-        const uploadRes = await uploadBufferToCloudinary(req.file.buffer, { folder: "products" });
-        req.body.image = uploadRes.secure_url || uploadRes.url;
-      } catch (uploadErr) {
-        console.error("Cloudinary upload failed in editProduct (continuing without new image):", uploadErr);
-        // continue — update other fields even if image upload fails
-      }
+    if (!clientUpdatedAt) {
+      console.warn(">>> editProduct: clientUpdatedAt MISSING in request body");
+      return res.status(400).json({ success: false, message: "clientUpdatedAt is required (strict debug mode)" });
     }
 
-    // Minimal mapping: if frontend sent title, copy to name so validation passes
-    if (req.body.title && !req.body.name) {
-      req.body.name = req.body.title;
+    // parse guard date
+    const guardDate = new Date(clientUpdatedAt);
+    console.log(">>> clientUpdatedAt (raw):", clientUpdatedAt);
+    console.log(">>> guardDate (parsed):", guardDate, "isValid:", !Number.isNaN(guardDate.getTime()));
+
+    if (Number.isNaN(guardDate.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid clientUpdatedAt format" });
     }
 
-    const update = req.body;
-    const updated = await Product.findByIdAndUpdate(id, update, { new: true });
-    if (!updated) return res.status(404).json({ success: false, message: "Product not found" });
+    // Build updates and remove guard field
+    const updates = { ...req.body };
+    delete updates.clientUpdatedAt;
 
+    // Show the DB value BEFORE update
+    const current = await Product.findById(id).lean();
+    if (!current) {
+      console.warn(">>> editProduct: product not found id=", id);
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+    console.log(">>> DB current.updatedAt (raw):", current.updatedAt);
+    console.log(">>> DB current.updatedAt (ms):", new Date(current.updatedAt).getTime());
+
+    // Log numeric comparison
+    console.log(">>> guardDate ms:", guardDate.getTime(), "dbUpdatedAt ms:", new Date(current.updatedAt).getTime());
+    console.log(">>> equal times?:", guardDate.getTime() === new Date(current.updatedAt).getTime());
+
+    // Try the guarded update
+    const updated = await Product.findOneAndUpdate(
+      { _id: id, updatedAt: guardDate },
+      { $set: updates, $currentDate: { updatedAt: true } },
+      { new: true }
+    );
+
+    if (!updated) {
+      console.warn(">>> Timestamp guard failed -> returning 409 with current product");
+      const fresh = await Product.findById(id);
+      return res.status(409).json({
+        success: false,
+        message: "Conflict: product changed since you opened it.",
+        product: fresh,
+      });
+    }
+
+    console.log(">>> Guard matched — update applied. New updatedAt:", updated.updatedAt);
     return res.status(200).json({ success: true, product: updated });
   } catch (err) {
-    console.error("editProduct error (full):", err);
+    console.error(">>> editProduct error:", err);
     return res.status(500).json({ success: false, message: "Failed to edit product", error: err.message || err });
   }
 };
+
 
 // Admin: Delete product
 export const deleteProduct = async (req, res) => {

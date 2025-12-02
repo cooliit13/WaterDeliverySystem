@@ -2,13 +2,16 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
+import User from "../models/User.js"; // fallback: some drivers may live in users collection
 import Order from "../models/order.js";
-import cloudinary from "../config/cloudinary.js"; // adjust path if your cloudinary export is elsewhere
+import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
+
+// use delivery processing helper so proof upload also updates stock/deliveredQty
+import { processDelivery } from "./orderController.js";
 
 /**
  * ADMIN: createDriverAccount
- * (Creates a driver record, used by adminRoutes)
  */
 export const createDriverAccount = async (req, res) => {
   try {
@@ -187,6 +190,7 @@ export const updateDeliveryStatus = async (req, res) => {
  * - uploads to Cloudinary and stores secure URL in order.proofOfDelivery
  * - sets order.status = 'completed'
  * - marks driver available again
+ * - calls processDelivery(...) so product stock & deliveredQty are updated
  */
 export const uploadProofOfDelivery = async (req, res) => {
   try {
@@ -222,6 +226,7 @@ export const uploadProofOfDelivery = async (req, res) => {
       {
         proofOfDelivery: secureUrl,
         status: "completed",
+        updatedAt: new Date(),
       },
       { new: true }
     );
@@ -230,7 +235,20 @@ export const uploadProofOfDelivery = async (req, res) => {
 
     // mark driver available
     if (order.driverId) {
-      await Driver.findByIdAndUpdate(order.driverId, { status: "available" });
+      try {
+        await Driver.findByIdAndUpdate(order.driverId, { status: "available" });
+      } catch (e) {
+        console.warn("uploadProofOfDelivery: failed to mark driver available:", e);
+      }
+    }
+
+    // call processDelivery to decrement stock and set deliveredQty
+    try {
+      console.log(`uploadProofOfDelivery: calling processDelivery for order ${orderId}`);
+      const procResult = await processDelivery(orderId, null);
+      console.log("uploadProofOfDelivery: processDelivery result:", procResult);
+    } catch (procErr) {
+      console.error("uploadProofOfDelivery: processDelivery error (stock may not be updated):", procErr);
     }
 
     return res.json({
@@ -242,4 +260,38 @@ export const uploadProofOfDelivery = async (req, res) => {
     console.error("uploadProofOfDelivery error:", err);
     return res.status(500).json({ message: err.message });
   }
+};
+
+/**
+ * getAllDriversAdmin
+ * - Returns list of drivers for admin UI.
+ * - Tries Driver model first; if empty uses User collection filtered by role: "driver"
+ */
+export const getAllDriversAdmin = async (req, res) => {
+  try {
+    // Prefer dedicated Driver collection if it has entries
+    const driverDocs = await Driver.find({}).select("-password").lean();
+    if (Array.isArray(driverDocs) && driverDocs.length > 0) {
+      return res.status(200).json({ success: true, drivers: driverDocs });
+    }
+
+    // Fallback to users collection where role === 'driver'
+    const userDrivers = await User.find({ role: "driver" }).select("-password").lean();
+    return res.status(200).json({ success: true, drivers: userDrivers });
+  } catch (err) {
+    console.error("getAllDriversAdmin error:", err);
+    return res.status(500).json({ success: false, message: "Failed to fetch drivers", error: err.message });
+  }
+};
+
+export default {
+  createDriverAccount,
+  registerDriver,
+  loginDriver,
+  getDriverProfile,
+  updateDriverProfile,
+  getAssignedOrders,
+  updateDeliveryStatus,
+  uploadProofOfDelivery,
+  getAllDriversAdmin,
 };

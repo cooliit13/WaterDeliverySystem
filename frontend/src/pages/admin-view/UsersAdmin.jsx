@@ -1,7 +1,6 @@
 // src/pages/admin-view/UsersAdmin.jsx
 import { useEffect, useState } from "react";
 import { Edit2 } from "lucide-react";
-import { apiFetch } from "@/utils/apiFetch";
 
 export default function UsersAdmin() {
   const [users, setUsers] = useState([]);
@@ -18,8 +17,15 @@ export default function UsersAdmin() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch("/api/admin/users");
-      const list = Array.isArray(data) ? data : data?.users || [];
+      const res = await fetch("http://localhost:5000/api/admin/users", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Failed to fetch users (status ${res.status})`);
+      }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : data?.users ?? [];
       setUsers(list);
     } catch (err) {
       setError(err.message || "Failed to fetch users");
@@ -28,36 +34,16 @@ export default function UsersAdmin() {
     }
   }
 
-  // FIXED — now supports fullName
   function resolveName(user) {
     if (!user) return "No name";
-
-    // 1) fullName field from MongoDB
-    if (user.fullName && user.fullName.trim() !== "") {
-      return user.fullName.trim();
-    }
-
-    // 2) firstname + lastname
+    if (user.fullName && user.fullName.trim() !== "") return user.fullName.trim();
     const first = user.firstname?.trim() || "";
     const last = user.lastname?.trim() || "";
     const full = `${first} ${last}`.trim();
     if (full) return full;
-
-    // 3) name
-    if (user.name && user.name.trim() !== "") {
-      return user.name.trim();
-    }
-
-    // 4) username
-    if (user.username && user.username.trim() !== "") {
-      return user.username.trim();
-    }
-
-    // 5) email
-    if (user.email && user.email.trim() !== "") {
-      return user.email.trim();
-    }
-
+    if (user.name && user.name.trim() !== "") return user.name.trim();
+    if (user.username && user.username.trim() !== "") return user.username.trim();
+    if (user.email && user.email.trim() !== "") return user.email.trim();
     return "No name";
   }
 
@@ -65,23 +51,57 @@ export default function UsersAdmin() {
     const id = user?.id || user?._id;
     setEditingUserId(id);
     setNewRole(user?.role || "user");
+    setError(null);
   }
 
   async function saveRole(userId) {
+    setError(null);
     try {
-      await apiFetch(`/api/admin/users/${userId}/role`, {
+      // find the current user object from state to read updatedAt
+      const userObj = users.find((u) => (u.id || u._id) === userId);
+      const clientUpdatedAt = userObj?.updatedAt ?? null;
+
+      const payload = { role: newRole, clientUpdatedAt };
+
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}/role`, {
         method: "PATCH",
-        body: JSON.stringify({ role: newRole }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(payload),
       });
 
-      setUsers(prev =>
-        prev.map(u => {
-          const uid = u?.id || u?._id;
-          return uid === userId ? { ...u, role: newRole } : u;
-        })
-      );
+      const data = await res.json().catch(() => ({}));
 
-      setEditingUserId(null);
+      if (res.status === 200 && data?.user) {
+        // success — update local state
+        setUsers((prev) => prev.map((u) => ((u.id || u._id) === userId ? data.user : u)));
+        setEditingUserId(null);
+        setNewRole("");
+      } else if (res.status === 429) {
+        // Cooldown: server includes waitSeconds, updatedBy (name) and latest user
+        const who = data?.updatedBy || (data?.user?.updatedBy?.name) || "Another admin";
+        const secondsLeft = data?.waitSeconds ?? null;
+        // update local user with latest from server so the UI shows the changed values
+        if (data?.user) {
+          setUsers((prev) => prev.map((u) => ((u.id || u._id) === userId ? data.user : u)));
+        }
+        setEditingUserId(null);
+        setNewRole("");
+        setError(`${who} edited this ${data?.user ? " — view updated" : ""}. Please wait ${secondsLeft ?? "a moment"} before retrying.`);
+      } else if (res.status === 409) {
+        // Conflict: another admin changed the user — server returns latest user
+        if (data?.user) {
+          setUsers((prev) => prev.map((u) => ((u.id || u._id) === userId ? data.user : u)));
+        }
+        setEditingUserId(null);
+        setNewRole("");
+        setError("Conflict: another admin changed this user. View updated with latest values.");
+      } else {
+        setError(data?.message || `Failed to save role (status ${res.status})`);
+      }
     } catch (err) {
       setError(err.message || "Failed to save role");
     }

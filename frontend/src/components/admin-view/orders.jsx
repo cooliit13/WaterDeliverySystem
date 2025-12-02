@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Dialog } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   Table,
   TableBody,
@@ -25,6 +31,14 @@ function AdminOrdersView() {
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [selectedDrivers, setSelectedDrivers] = useState({});
   const [productMap, setProductMap] = useState({}); // productId (string) -> title
+
+  // --------- NEW: confirm + info modal state (minimal) ----------
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState(null);
+  const [pendingDriverId, setPendingDriverId] = useState(null);
+
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
+  const [infoMessage, setInfoMessage] = useState("");
 
   const { orderList, orderDetails } = useSelector((s) => s.adminOrder);
   const { drivers } = useSelector((s) => s.adminDrivers);
@@ -66,6 +80,8 @@ function AdminOrdersView() {
     dispatch(getOrderDetailsForAdmin(id));
   }
 
+  // ----------------- Approve flow -----------------
+  // minimal approve: call API, refresh list, show info modal on success/failure
   async function handleApprove(orderId, driverId) {
     try {
       const token = localStorage.getItem("token");
@@ -74,12 +90,27 @@ function AdminOrdersView() {
         { orderId, driverId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      // refresh orders
       dispatch(getAllOrdersForAdmin());
-      alert("Order approved and driver assigned");
+
+      // close confirm and show success info modal
+      setConfirmDialogOpen(false);
+      setInfoMessage("Order approved and driver assigned");
+      setInfoDialogOpen(true);
     } catch (err) {
       console.error(err);
-      alert("Failed to approve order");
+      setConfirmDialogOpen(false);
+      setInfoMessage("Failed to approve order");
+      setInfoDialogOpen(true);
     }
+  }
+
+  // open confirmation modal (called when a driver is selected)
+  function openApproveConfirmation(orderId, driverId) {
+    setPendingOrderId(orderId);
+    setPendingDriverId(driverId);
+    setConfirmDialogOpen(true);
   }
 
   const sourceDrivers = Array.isArray(drivers) ? drivers : [];
@@ -236,105 +267,155 @@ function AdminOrdersView() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>All Orders</CardTitle>
-      </CardHeader>
+    <>
+      {/* Confirm Approve Dialog (minimal) */}
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Order?</DialogTitle>
+          </DialogHeader>
 
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Items</TableHead>
-              <TableHead>Quantity</TableHead>
-              <TableHead>Order Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Driver Assignment</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orderList && orderList.length > 0 ? (
-              orderList.map((order) => (
-                <TableRow key={order._id} className="border-t hover:bg-gray-50">
-                  <TableCell className="px-4 py-3 align-top">
-                    {renderItemsSummary(order)}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">{totalQuantity(order)}</TableCell>
-                  <TableCell className="px-4 py-3 text-sm">
-                    {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "—"}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Badge
-                      className={`py-1 px-3 ${
-                        order.status === "completed" ? "bg-green-500" : order.status === "cancelled" ? "bg-red-600" : "bg-black"
-                      }`}
-                    >
-                      {order.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">₱{order.totalAmount ?? order.total}</TableCell>
-                  <TableCell className="px-4 py-3">
-                    <select
-                      value={selectedDrivers[order._id] || ""}
-                      onChange={(e) =>
-                        setSelectedDrivers({
-                          ...selectedDrivers,
-                          [order._id]: e.target.value,
-                        })
-                      }
-                      className="border p-2 rounded"
-                    >
-                      <option value="">Assign Driver</option>
-                      {sourceDrivers.map((driver) => {
-                        const id = driver._id ?? driver.id ?? "";
-                        const label = driver.name ?? driver.fullName ?? driver.email ?? "Driver";
-                        if (!id) return null;
-                        return (
-                          <option key={id} value={id}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
+          <div className="mt-2 text-sm text-gray-700">
+            Are you sure you want to approve this order and assign the selected driver?
+          </div>
 
-                    <Button
-                      className="ml-2 mt-2"
-                      onClick={() => {
-                        const driverId = (selectedDrivers[order._id] || "").toString().trim();
-                        if (!driverId) return alert("Select a driver first");
-                        handleApprove(order._id, driverId);
-                      }}
-                    >
-                      Approve
-                    </Button>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Dialog
-                      open={openDetailsDialog}
-                      onOpenChange={() => {
-                        setOpenDetailsDialog(false);
-                        dispatch(resetOrderDetails());
-                      }}
-                    >
-                      <Button onClick={() => handleFetchOrderDetails(order._id)}>View Details</Button>
-                      <AdminOrderDetailsView orderDetails={orderDetails} />
-                    </Dialog>
+          <DialogFooter className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleApprove(pendingOrderId, pendingDriverId)}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Info modal used for "Select driver first" and success/failure */}
+      <Dialog open={infoDialogOpen} onOpenChange={setInfoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Notice</DialogTitle>
+          </DialogHeader>
+
+          <div className="mt-2 text-sm text-gray-700">{infoMessage}</div>
+
+          <DialogFooter className="mt-4">
+            <Button onClick={() => setInfoDialogOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Orders</CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Items</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Order Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Driver Assignment</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orderList && orderList.length > 0 ? (
+                orderList.map((order) => (
+                  <TableRow key={order._id} className="border-t hover:bg-gray-50">
+                    <TableCell className="px-4 py-3 align-top">
+                      {renderItemsSummary(order)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">{totalQuantity(order)}</TableCell>
+                    <TableCell className="px-4 py-3 text-sm">
+                      {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Badge
+                        className={`py-1 px-3 ${
+                          order.status === "completed"
+                            ? "bg-green-500"
+                            : order.status === "cancelled"
+                            ? "bg-red-600"
+                            : "bg-black"
+                        }`}
+                      >
+                        {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">₱{order.totalAmount ?? order.total}</TableCell>
+                    <TableCell className="px-4 py-3">
+                      <select
+                        value={selectedDrivers[order._id] || ""}
+                        onChange={(e) =>
+                          setSelectedDrivers({
+                            ...selectedDrivers,
+                            [order._id]: e.target.value,
+                          })
+                        }
+                        className="border p-2 rounded"
+                      >
+                        <option value="">Assign Driver</option>
+                        {sourceDrivers.map((driver) => {
+                          const id = driver._id ?? driver.id ?? "";
+                          const label = driver.name ?? driver.fullName ?? driver.email ?? "Driver";
+                          if (!id) return null;
+                          return (
+                            <option key={id} value={id}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+
+                      <Button
+                        className="ml-2 mt-2"
+                        onClick={() => {
+                          const driverId = (selectedDrivers[order._id] || "").toString().trim();
+                          if (!driverId) {
+                            // show the info modal instead of alert
+                            setInfoMessage("Select driver first");
+                            setInfoDialogOpen(true);
+                            return;
+                          }
+                          openApproveConfirmation(order._id, driverId);
+                        }}
+                      >
+                        Approve
+                      </Button>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Dialog
+                        open={openDetailsDialog}
+                        onOpenChange={() => {
+                          setOpenDetailsDialog(false);
+                          dispatch(resetOrderDetails());
+                        }}
+                      >
+                        <Button onClick={() => handleFetchOrderDetails(order._id)}>View Details</Button>
+                        <AdminOrderDetailsView orderDetails={orderDetails} />
+                      </Dialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                    No orders found.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="px-4 py-6 text-center text-gray-500">
-                  No orders found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 

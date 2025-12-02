@@ -111,7 +111,7 @@ router.get("/:id", async (req, res) => {
 
 // Edit product (Admin) — matches frontend PUT /api/admin/products/edit/:id
 router.put("/edit/:id", authMiddleware, upload.single("image"), ProductController.editProduct);
-
+console.log("productRoutes: registered PUT /api/admin/products/edit/:id");
 // Delete product (Admin) — matches frontend DELETE /api/admin/products/delete/:id
 router.delete("/delete/:id", authMiddleware, ProductController.deleteProduct);
 

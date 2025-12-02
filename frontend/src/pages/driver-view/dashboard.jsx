@@ -4,29 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  MapPin,
-  Bell,
-  CheckCircle,
-  XCircle,
-  LogOut,
-  Phone,
-  Camera,
-} from "lucide-react";
-
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import iconUrl from "leaflet/dist/images/marker-icon.png";
-import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
-import shadowUrl from "leaflet/dist/images/marker-shadow.png";
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-});
+import { MapPin, Bell, CheckCircle, XCircle, LogOut, Camera } from "lucide-react";
 
 function DriverDashboard() {
   const [deliveries, setDeliveries] = useState([]);
@@ -35,10 +13,9 @@ function DriverDashboard() {
 
   const [coordsMap, setCoordsMap] = useState({});
 
-  // file input ref & state
+  // file input ref & state for proof upload flow
   const fileInputRef = useRef(null);
   const currentOrderRef = useRef(null);
-  // flag to indicate the file picker was opened for "deliver" action
   const pendingDeliverRef = useRef(false);
 
   const activeControllerRef = useRef(null);
@@ -123,6 +100,7 @@ function DriverDashboard() {
       }
 
       const payload = await res.json();
+      // order array may be returned directly or in payload.orders
       const orders = Array.isArray(payload) ? payload : payload.orders ?? payload.data ?? [];
       setDeliveries(orders);
       setNotification(orders.length > 0 ? "New delivery assigned!" : "");
@@ -134,33 +112,31 @@ function DriverDashboard() {
     }
   };
 
-  // geocode
-  const geocodeAddress = async (address) => {
-    if (!address) return null;
-    if (coordsMap[address]) return coordsMap[address];
-
+  // geocode helper (client-side fallback) using Nominatim (free)
+  const geocodeText = async (text) => {
+    if (!text) return null;
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        address
+        text
       )}&limit=1`;
-      const res = await fetch(url, {
+      const r = await fetch(url, {
         headers: {
           "User-Agent": "WaterDeliverySystem/1.0 (student@example.com)",
         },
       });
-      const data = await res.json();
+      if (!r.ok) return null;
+      const data = await r.json();
       if (Array.isArray(data) && data.length > 0) {
         const { lat, lon } = data[0];
-        const coords = { lat: Number(lat), lng: Number(lon) };
-        setCoordsMap((prev) => ({ ...prev, [address]: coords }));
-        return coords;
+        return { lat: Number(lat), lng: Number(lon) };
       }
     } catch (err) {
-      console.error("Geocode error for", address, err);
+      console.error("geocodeText error:", err);
     }
     return null;
   };
 
+  // Try to populate coordsMap from existing data on load
   useEffect(() => {
     if (!deliveries || deliveries.length === 0) return;
 
@@ -178,22 +154,79 @@ function DriverDashboard() {
       return next;
     });
 
+    // attempt to geocode addresses that lack coordinates (stagger to be polite)
     deliveries.forEach((d, idx) => {
       const address = d.deliveryAddress || d.address || "";
       if (!address) return;
-      const hasCoords =
-        (d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng) ||
-        coordsMap[address];
+      const dbCoords =
+        d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng;
+      const hasCoords = dbCoords || coordsMap[address];
       if (!hasCoords) {
+        // stagger requests to avoid hammering the free service
         setTimeout(() => {
-          geocodeAddress(address);
-        }, idx * 250);
+          (async () => {
+            const cleaned = cleanAddressString(address);
+            const coords = await geocodeText(cleaned);
+            if (coords) {
+              setCoordsMap((prev) => ({ ...prev, [address]: coords }));
+            }
+          })();
+        }, idx * 300);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveries]);
 
-  // keep existing status update (for on the way / cancel) — deliver handled specially
+  // helper cleans up the address text block (remove Phone:, Notes:, newlines)
+  const cleanAddressString = (raw) => {
+    if (!raw) return "";
+    let s = String(raw);
+    s = s.replace(/Phone:\s*[^,;]*/gi, "");
+    s = s.replace(/Notes:\s*.*$/gim, "");
+    s = s.replace(/\r/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    return s;
+  };
+
+  // openLocation: prefer precise coords, fallback to geocoding, fallback to cleaned address
+  const openLocation = async (order) => {
+    if (!order) return alert("No order data");
+
+    // 1) DB coords
+    const dbCoords = order.deliveryLocation;
+    if (dbCoords && dbCoords.lat && dbCoords.lng) {
+      const lat = Number(dbCoords.lat);
+      const lng = Number(dbCoords.lng);
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+        return;
+      }
+    }
+
+    // 2) coordsMap (from earlier geocode attempts)
+    const addr = order.deliveryAddress || order.address || "";
+    const cached = coordsMap[addr];
+    if (cached && cached.lat && cached.lng) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${cached.lat},${cached.lng}`);
+      return;
+    }
+
+    // 3) cleaned address + geocode
+    const cleaned = cleanAddressString(order.deliveryAddress || order.address || "");
+    if (cleaned) {
+      const coords = await geocodeText(cleaned);
+      if (coords && coords.lat && coords.lng) {
+        // cache it for later
+        setCoordsMap((prev) => ({ ...prev, [addr]: coords }));
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`);
+        return;
+      }
+    }
+
+    // 4) final fallback: open maps with cleaned address text
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cleaned || addr)}`);
+  };
+
+  // keep existing status update (for on the way / cancel)
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem("token");
@@ -236,13 +269,10 @@ function DriverDashboard() {
     }
   };
 
-  // ---------- NEW FLOW: Delivered -> pick image -> upload proof -> mark delivered ----------
+  // ---------- Delivered -> pick image -> upload proof -> mark delivered ----------
   const handleDeliverClick = (orderId) => {
-    // set refs so file input knows intent
     currentOrderRef.current = orderId;
     pendingDeliverRef.current = true;
-
-    // trigger native file picker
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
@@ -264,7 +294,6 @@ function DriverDashboard() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          // DO NOT set Content-Type here — browser will set multipart/form-data boundary
         },
         body: fd,
       });
@@ -283,9 +312,6 @@ function DriverDashboard() {
         return;
       }
 
-      // optionally use response data (order with proof url)
-      // const uploadJson = await uploadRes.json();
-
       // 2) Mark order as delivered (call deliver endpoint)
       const deliverRes = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/deliver`, {
         method: "PUT",
@@ -293,7 +319,7 @@ function DriverDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({}), // backend will compute remaining items if no items provided
       });
 
       if (deliverRes.status === 401) {
@@ -316,19 +342,17 @@ function DriverDashboard() {
     } catch (err) {
       console.error("uploadProofAndMarkDelivered error:", err);
     } finally {
-      // reset refs
       pendingDeliverRef.current = false;
       currentOrderRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  // file input onChange: detect whether it's for deliver flow
+  // file input onChange
   const onFileChange = (e) => {
     const file = e?.target?.files?.[0] ?? null;
     const orderId = currentOrderRef.current;
     if (!file || !orderId) {
-      // cleanup
       pendingDeliverRef.current = false;
       currentOrderRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -336,21 +360,17 @@ function DriverDashboard() {
     }
 
     if (pendingDeliverRef.current) {
-      // start upload + deliver
       uploadProofAndMarkDelivered(orderId, file);
       return;
     }
 
-    // fallback: if file input used for other actions in future
-    // cleanup
     currentOrderRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleOpenFile = (orderId) => {
-    // legacy helper if you want a separate Upload Proof button in future
     currentOrderRef.current = orderId;
-    pendingDeliverRef.current = false; // not a deliver action
+    pendingDeliverRef.current = false;
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
@@ -377,16 +397,9 @@ function DriverDashboard() {
     }, 10);
   };
 
-  const firstCoords = (() => {
-    for (const d of deliveries) {
-      const addr = d.deliveryAddress || d.address || "";
-      const dbCoords = d.deliveryLocation;
-      if (dbCoords && dbCoords.lat && dbCoords.lng) return { lat: dbCoords.lat, lng: dbCoords.lng };
-      const c = coordsMap[addr];
-      if (c) return c;
-    }
-    return { lat: 14.5995, lng: 120.9842 };
-  })();
+  function totalItemsCount(order) {
+    return (order.items || []).reduce((s, it) => s + Number(it.quantity ?? it.qty ?? 0), 0);
+  }
 
   return (
     <div className="p-6 space-y-8">
@@ -413,163 +426,102 @@ function DriverDashboard() {
         onChange={onFileChange}
       />
 
-      <Tabs defaultValue="deliveries">
-        <TabsList>
-          <TabsTrigger value="deliveries">My Deliveries</TabsTrigger>
-          <TabsTrigger value="map">GPS & Navigation</TabsTrigger>
-        </TabsList>
+      {deliveries.length === 0 && <p className="text-gray-500">No assigned deliveries yet.</p>}
 
-        <TabsContent value="deliveries">
-          {deliveries.length === 0 && <p className="text-gray-500">No assigned deliveries yet.</p>}
+      {deliveries.map((order) => (
+        <Card key={order._id} className="mb-4">
+          <CardHeader>
+            <CardTitle>{order.customerId?.fullName || "Unknown Customer"}</CardTitle>
+          </CardHeader>
 
-          {deliveries.map((order) => (
-            <Card key={order._id} className="mb-4">
-              <CardHeader>
-                <CardTitle>{order.customerId?.fullName || "Unknown Customer"}</CardTitle>
-              </CardHeader>
+          <CardContent className="space-y-2">
+            <p>
+              <strong>Address:</strong> {order.deliveryAddress}
+            </p>
 
-              <CardContent className="space-y-2">
-                <p>
-                  <strong>Address:</strong> {order.deliveryAddress}
-                </p>
+            <p className="flex items-center gap-1">
+              <strong>Contact:</strong>{" "}
+              {order.customerId?.phoneNumber || order.customerId?.phone || "N/A"}
+            </p>
 
-                <p className="flex items-center gap-1">
-                  <Phone className="h-4 w-4" />
-                  <strong>Contact:</strong>{" "}
-                  {order.customerId?.phoneNumber || order.customerId?.phone || "N/A"}
-                </p>
+            <p>
+              <strong>Order Items:</strong>
+            </p>
 
-                <p>
-                  <strong>Order Items:</strong>
-                </p>
+            <ul className="list-disc ml-6">
+              {order.items?.map((item, i) => (
+                <li key={i}>
+                  {item.quantity}x {item.productName}
+                </li>
+              )) || <li>No items</li>}
+            </ul>
 
-                <ul className="list-disc ml-6">
-                  {order.items?.map((item, i) => (
-                    <li key={i}>
-                      {item.quantity}x {item.productName}
-                    </li>
-                  ))}
-                </ul>
+            <div className="flex items-center gap-2 mt-2">
+              <strong>Status:</strong>
+              <Badge
+                variant={
+                  order.status === "completed"
+                    ? "default"
+                    : order.status === "cancelled"
+                    ? "destructive"
+                    : "outline"
+                }
+              >
+                {order.status}
+              </Badge>
+            </div>
 
-                <div className="flex items-center gap-2 mt-2">
-                  <strong>Status:</strong>
-                  <Badge
-                    variant={
-                      order.status === "completed"
-                        ? "default"
-                        : order.status === "cancelled"
-                        ? "destructive"
-                        : "outline"
-                    }
-                  >
-                    {order.status}
-                  </Badge>
-                </div>
+            {order.proofOfDelivery && (
+              <img
+                src={
+                  order.proofOfDelivery.startsWith("http")
+                    ? order.proofOfDelivery
+                    : `http://localhost:5000${order.proofOfDelivery.startsWith("/") ? "" : "/"}${order.proofOfDelivery}`
+                }
+                alt="Proof"
+                className="rounded-lg mt-3 w-48 border"
+              />
+            )}
 
-                {order.proofOfDelivery && (
-                  <img
-                    src={
-                      order.proofOfDelivery.startsWith("http")
-                        ? order.proofOfDelivery
-                        : `http://localhost:5000${order.proofOfDelivery.startsWith("/") ? "" : "/"}${order.proofOfDelivery}`
-                    }
-                    alt="Proof"
-                    className="rounded-lg mt-3 w-48 border"
-                  />
-                )}
+            <div className="flex gap-2 mt-3 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate(order._id, "delivering")}
+              >
+                <CheckCircle className="h-4 w-4 mr-1" /> On the Way
+              </Button>
 
-                <div className="flex gap-2 mt-3 flex-wrap">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleStatusUpdate(order._id, "delivering")}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" /> On the Way
-                  </Button>
+              <Button
+                variant="ghost"
+                onClick={() => openLocation(order)}
+                className="flex items-center"
+              >
+                <MapPin className="h-4 w-4 mr-1" /> See Location
+              </Button>
 
-                  {/* Delivered button now triggers file picker and upload -> mark delivered */}
-                  <Button
-                    variant="default"
-                    onClick={() => handleDeliverClick(order._id)}
-                    className="flex items-center"
-                  >
-                    <Camera className="h-4 w-4 mr-1" /> Delivered (upload proof)
-                  </Button>
+              <Button
+                variant="default"
+                onClick={() => handleDeliverClick(order._id)}
+                className="flex items-center"
+              >
+                <Camera className="h-4 w-4 mr-1" /> Delivered (upload proof)
+              </Button>
 
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleStatusUpdate(order._id, "cancelled")}
-                  >
-                    <XCircle className="h-4 w-4 mr-1" /> Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
+              <Button
+                variant="destructive"
+                onClick={() => handleStatusUpdate(order._id, "cancelled")}
+              >
+                <XCircle className="h-4 w-4 mr-1" /> Cancel
+              </Button>
+            </div>
 
-        <TabsContent value="map">
-          <Card>
-            <CardHeader>
-              <CardTitle>GPS Navigation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Interactive map of assigned deliveries (click marker for details)
-              </p>
-
-              <div className="mt-4 h-[400px] w-full rounded-lg overflow-hidden">
-                <MapContainer
-                  center={[firstCoords.lat, firstCoords.lng]}
-                  zoom={13}
-                  style={{ height: "100%", width: "100%" }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-
-                  {deliveries.map((order) => {
-                    const dbCoords = order.deliveryLocation;
-                    const addr = order.deliveryAddress || order.address || "";
-
-                    const coords = dbCoords && dbCoords.lat && dbCoords.lng
-                      ? { lat: dbCoords.lat, lng: dbCoords.lng }
-                      : coordsMap[addr];
-
-                    if (!coords) return null;
-
-                    return (
-                      <Marker key={order._id} position={[coords.lat, coords.lng]}>
-                        <Popup>
-                          <div className="max-w-xs">
-                            <strong>{order.customerId?.fullName || "Customer"}</strong>
-                            <div className="text-sm">{order.deliveryAddress}</div>
-                            <div className="mt-1">
-                              <Button
-                                variant="link"
-                                onClick={() =>
-                                  window.open(
-                                    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                                      order.deliveryAddress
-                                    )}`
-                                  )
-                                }
-                              >
-                                Open in Google Maps
-                              </Button>
-                            </div>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  })}
-                </MapContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            <div className="text-sm text-muted-foreground mt-2">
+              <div>Total items: {totalItemsCount(order)}</div>
+              <div>Delivery date: {order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—"}</div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
