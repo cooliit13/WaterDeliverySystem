@@ -12,12 +12,9 @@ build/
 .vscode/
 
 # Ignore Google API credentials (VERY IMPORTANT)
-backend/src/google/credentials.json
-backend/src/google/service-account.json
-backend/src/google/token.json
+src/google/credentials.json
+src/google/service-account.json
+src/google/token.json
 
 # Ignore all JSON files inside google folder
-backend/src/google/*.json
-
-# (Optional) ignore entire google folder
-# backend/src/google/
+src/google/*.json
