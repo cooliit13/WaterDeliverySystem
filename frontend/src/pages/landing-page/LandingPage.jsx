@@ -3,10 +3,13 @@ import { Link } from "react-router-dom";
 
 // images imported from src (not public)
 import bannerImg from "../../assets/pictures/banners/more a banner of watter refilling.jpg";
-// replaced right product image (was 10.png)
-import waterJug from "../../assets/pictures/banners/AquaTrack- Water Refilling this is the name.jpg";
-// replaced about image (was truckImg)
+// product images (front/back)
+import bottleFront from "../../assets/pictures/BOTTLES/590500769_1626201502081765_2531155977572808270_n.png";
+import bottleBack from "../../assets/pictures/BOTTLES/590182432_1378158400632197_3293300031910595920_n.png";
+// about image
 import truckImg from "../../assets/pictures/banners/a (1).png";
+// logo
+import logoImg from "../../assets/pictures/LOGO/AcquaLogo.png";
 
 export default function LandingPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
@@ -38,12 +41,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center border border-blue-100 bg-blue-50">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C12 2 7 7 7 11.5C7 15.9853 10.5817 19 12 19C13.4183 19 17 15.9853 17 11.5C17 7 12 2 12 2Z"
-                    stroke="#1D4ED8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+              <img src={logoImg} alt="Water Refill Logo" className="w-10 h-10 object-contain" />
               <div className="text-blue-600 font-bold text-lg">Water Refill</div>
             </div>
 
@@ -51,6 +49,7 @@ export default function LandingPage() {
             <nav className="hidden md:flex items-center space-x-8">
               <a href="#home" onClick={scrollTo("#home")} className="hover:text-blue-600 transition-colors">Home</a>
               <a href="#about" onClick={scrollTo("#about")} className="hover:text-blue-600 transition-colors">About</a>
+              <a href="#services" onClick={scrollTo("#services")} className="hover:text-blue-600 transition-colors">Services</a>
               <a href="#contact" onClick={scrollTo("#contact")} className="hover:text-blue-600 transition-colors">Contact</a>
             </nav>
 
@@ -102,27 +101,48 @@ export default function LandingPage() {
                   Premium mineral, alkaline, and purified drinking water delivered fast to your local area. Enjoy the best water delivery service in town.
                 </p>
 
-                {/* NOTE: Login/Register removed from hero per request */}
+                {/* NOTE: View Services removed from hero; Login present in header */}
                 <p className="text-sm text-slate-600 mt-6">Serving your community with clean water — fast, safe, and always reliable.</p>
               </div>
 
-              {/* Product card on right with hover effect - updated image */}
+              {/* Product card on right with layered hover effect (Product badge, small badge removed) */}
               <div className="lg:col-span-5 flex justify-end">
                 <div className="relative w-72 lg:w-80 mt-6 lg:mt-0">
-                  <div className="absolute -top-6 -left-6 bg-white rounded-full px-4 py-2 shadow-md text-xs font-semibold text-blue-600">FREE<br/>DELIVERY</div>
+                  <div className="absolute -top-6 -left-6 bg-white rounded-full px-4 py-2 shadow-md text-xs font-semibold text-blue-600">
+                    Product
+                  </div>
 
-                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-2xl transition-transform duration-300 hover:shadow-2xl">
-                    <div className="overflow-hidden rounded-lg">
+                  {/* container providing perspective for a 3D-like hover */}
+                  <div className="relative group w-full h-[320px] lg:h-[360px]">
+
+                    {/* BACK IMAGE (slightly offset & moves on hover) */}
+                    <div
+                      className="absolute left-0 top-8 w-56 lg:w-64 h-[220px] lg:h-[260px] overflow-hidden
+                                 transform transition-transform duration-500 group-hover:translate-x-1 group-hover:-translate-y-1"
+                      aria-hidden="true"
+                    >
                       <img
-                        src={waterJug}
-                        alt="water jug"
-                        className="w-full h-56 object-contain rounded-lg transition-transform duration-300 transform hover:scale-105"
+                        src={bottleFront}
+                        alt="Water jug back layer"
+                        className="w-full h-full object-contain"
                       />
                     </div>
-                    <div className="mt-4 text-center">
-                      <div className="font-semibold text-slate-900">Water Refill</div>
-                      <div className="text-sm text-slate-600">5 Gallon Jug</div>
+
+                    {/* FRONT IMAGE */}
+                    <div
+                      className="absolute left-4 top-0 w-60 lg:w-64 h-[240px] lg:h-[300px] overflow-hidden transition-all duration-500
+                                 group-hover:-translate-y-3 group-hover:scale-[1.03] group-hover:rotate-[1deg]"
+                      role="img"
+                      aria-label="Water jug front view"
+                    >
+                      <img
+                        src={bottleBack}
+                        alt="Water jug front view"
+                        className="w-full h-full object-contain"
+                      />
                     </div>
+
+                    {/* (small badges removed) */}
                   </div>
                 </div>
               </div>
@@ -132,7 +152,7 @@ export default function LandingPage() {
         </section>
 
         {/* SERVICES */}
-        <section className="py-20">
+        <section id="services" className="py-20">
           <div className="max-w-7xl mx-auto px-6 lg:px-8">
             <div className="text-center mb-12">
               <p className="text-sm text-blue-600">Our Services</p>
@@ -174,8 +194,7 @@ export default function LandingPage() {
               <h3 className="text-xl font-bold">Ready to Start Your Water Delivery?</h3>
               <p className="mt-2 text-sm max-w-xl mx-auto">Join thousands of local customers who trust Water Refill for their daily hydration needs. Order now and experience the difference.</p>
               <div className="mt-6">
-                {/* Changed to plain text per request (not a button) */}
-                <div className="inline-block px-5 py-2 rounded-full bg-white/10 text-white font-semibold">Place Your First Order</div>
+                <div className="text-white font-semibold text-base mt-4">Place Your First Order</div>
               </div>
             </div>
           </div>
@@ -215,8 +234,6 @@ export default function LandingPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Removed the "Start Ordering Today" button per request */}
               </div>
 
               <div className="lg:col-span-6">

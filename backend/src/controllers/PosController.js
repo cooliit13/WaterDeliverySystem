@@ -1,10 +1,5 @@
-// backend/src/controllers/PosController.js
 import PosSale from "../models/PosSale.js";
 
-/**
- * GET /api/admin/pos/list
- * Returns recent POS sales (admin-protected).
- */
 export const listPosSales = async (req, res) => {
   try {
     const limit = Math.min(100, Number(req.query.limit) || 50);
@@ -20,12 +15,6 @@ export const listPosSales = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to fetch POS sales" });
   }
 };
-
-/**
- * POST /api/admin/pos/sale
- * Create a POS sale (admin-protected).
- * Accepts: { items: [...], totals: { subtotal, tax, total }, customer?, note? }
- */
 export const createPosSale = async (req, res) => {
   try {
     const payload = req.body || {};
@@ -44,7 +33,7 @@ export const createPosSale = async (req, res) => {
       totals,
       customer: payload.customer ?? undefined,
       note: payload.note ?? undefined,
-      createdBy: req.user?._id ?? undefined, // authMiddleware likely attaches req.user
+      createdBy: req.user?._id ?? undefined, 
     });
 
     return res.status(201).json({ success: true, sale: doc });

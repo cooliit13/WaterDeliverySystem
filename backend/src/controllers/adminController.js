@@ -1,4 +1,3 @@
-// backend/src/controllers/adminController.js
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Admin from "../models/admin.js";
@@ -9,11 +8,6 @@ import Order from "../models/order.js";
 
 // 1 minute cooldown
 const COOLDOWN_MS = 60 * 1000;
-
-/** -----------------------
- * Admin-related controllers
- * (only changed functions are updateUserStatus & updateUserRole)
- * ------------------------*/
 
 // Register Admin
 export const registerAdmin = async (req, res) => {
@@ -99,15 +93,6 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-/**
- * Update user status (approve, suspend, etc.) — TIMESTAMP ORDERING + 1-min cooldown
- * Expects optional clientUpdatedAt (ISO string). If provided, server
- * will apply update only if user's updatedAt matches clientUpdatedAt.
- *
- * Cooldown behavior:
- * - If last update happened less than COOLDOWN_MS ago -> return 429 with waitSeconds and the user doc.
- * - Response includes user doc so frontend can refresh UI.
- */
 export const updateUserStatus = async (req, res) => {
   try {
     const { status, clientUpdatedAt } = req.body;
@@ -132,7 +117,7 @@ export const updateUserStatus = async (req, res) => {
       });
     }
 
-    // find acting admin name (best-effort)
+    // find acting admin name
     let actingAdminName = null;
     try {
       const acting = await Admin.findById(req.user.id).select("name email");
@@ -180,12 +165,6 @@ export const updateUserStatus = async (req, res) => {
   }
 };
 
-/**
- * Update user role (TIMESTAMP ORDERING + 1-min cooldown)
- * Body: { role: "...", clientUpdatedAt: "<ISO string>" }
- *
- * Same behavior as updateUserStatus.
- */
 export const updateUserRole = async (req, res) => {
   try {
     const { role, clientUpdatedAt } = req.body;

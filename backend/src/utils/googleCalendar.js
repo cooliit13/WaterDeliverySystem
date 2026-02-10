@@ -1,4 +1,3 @@
-// utils/googleCalendar.js
 import { google } from "googleapis";
 import dotenv from "dotenv";
 import User from "../models/User.js";
@@ -8,8 +7,8 @@ const {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_REDIRECT_URI,
-  GOOGLE_CALENDAR_REFRESH_TOKEN, // app-level refresh token for admin account
-  GOOGLE_CALENDAR_ID, // optional: calendar id (default 'primary')
+  GOOGLE_CALENDAR_REFRESH_TOKEN, 
+  GOOGLE_CALENDAR_ID, 
 } = process.env;
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
@@ -46,10 +45,7 @@ export async function getTokensFromCode(code) {
   return tokens;
 }
 
-/**
- * Get a calendar client tied to a user.
- * Automatically refreshes and persists new tokens.
- */
+
 export function getCalendarClientForUser(user) {
   if (!user?.googleTokens) throw new Error("User has no stored Google tokens.");
 
@@ -74,16 +70,12 @@ export function getCalendarClientForUser(user) {
   return { calendar, oauth2Client };
 }
 
-/* ============================
-   App-level calendar client
-   (for Option A: post events into admin calendar)
-   ============================ */
+
 
 // create an OAuth client for app-level usage
 const appOAuthClient = createOAuthClient();
 
-// If env refresh token provided, set credentials so client can refresh/issue requests.
-// This is optional (but needed for app-level integration).
+
 if (GOOGLE_CALENDAR_REFRESH_TOKEN) {
   appOAuthClient.setCredentials({
     refresh_token: GOOGLE_CALENDAR_REFRESH_TOKEN,
@@ -105,12 +97,6 @@ if (GOOGLE_CALENDAR_REFRESH_TOKEN) {
 
 export const appCalendar = google.calendar({ version: "v3", auth: appOAuthClient });
 
-/**
- * createEventForOrder(order)
- * - Creates an event in the app/admin calendar (GOOGLE_CALENDAR_ID or 'primary').
- * - Accepts an order object (Mongoose doc or plain object).
- * - Returns the inserted event object from Google or null if not created.
- */
 export async function createEventForOrder(order) {
   if (!order) throw new Error("createEventForOrder: order required");
   if (!GOOGLE_CALENDAR_REFRESH_TOKEN) {

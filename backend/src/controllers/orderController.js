@@ -1,4 +1,3 @@
-// backend/src/controllers/orderController.js
 import mongoose from "mongoose";
 import Order from "../models/order.js";
 import Product from "../models/Product.js";
@@ -333,6 +332,61 @@ export const markOrderDelivered = async (req, res) => {
   }
 };
 
+/* ---------------------------------------------
+  Cancel order (customer request)
+  - ownership check (req.user if authMiddleware used)
+  - do not allow cancelling if already accepted/delivering/shipped/completed
+  - emits "order:cancelled" via global.io (if available)
+----------------------------------------------*/
+export const cancelOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id || req.params.orderId;
+    if (!orderId) return res.status(400).json({ success: false, message: "Missing order id" });
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ success: false, message: "Invalid order id" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // If auth middleware provides req.user, only allow owner to cancel
+    const requesterId = req.user?.id ?? req.user?._id ?? null;
+    if (requesterId && String(order.customerId) !== String(requesterId)) {
+      return res.status(403).json({ success: false, message: "Forbidden — you can only cancel your own orders" });
+    }
+
+    const currentStatus = String(order.status || "").toLowerCase();
+    const disallowed = ["confirm", "approved", "processing", "shipped", "out for delivery", "delivering", "completed"];
+    if (disallowed.some((kw) => currentStatus.includes(kw))) {
+      return res.status(400).json({ success: false, message: "Order cannot be cancelled at this stage" });
+    }
+
+    order.status = "cancelled";
+    order.cancelledAt = new Date();
+    if (requesterId) order.cancelledBy = requesterId;
+
+    await order.save();
+
+    // emit socket event for admin clients (use global.io set from server.js)
+    try {
+      if (global?.io && typeof global.io.emit === "function") {
+        global.io.emit("order:cancelled", {
+          orderId: String(order._id),
+          status: order.status,
+          cancelledAt: order.cancelledAt,
+          customerId: order.customerId,
+        });
+      }
+    } catch (emitErr) {
+      console.warn("Failed to emit order:cancelled socket event:", emitErr);
+    }
+
+    return res.json({ success: true, message: "Order cancelled", order });
+  } catch (err) {
+    console.error("cancelOrder error:", err);
+    return res.status(500).json({ success: false, message: "Server error cancelling order" });
+  }
+};
 
 /* ---------------------------------------------
   updateOrderStatus: update status; if status === 'completed' then process delivery
@@ -417,4 +471,5 @@ export default {
   updateOrderStatus,
   processDelivery,
   approveAndAssignDriver,
+  cancelOrder, // <-- added
 };

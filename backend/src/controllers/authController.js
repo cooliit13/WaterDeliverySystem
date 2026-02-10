@@ -6,10 +6,10 @@ import User from "../models/User.js";
 import { sendVerificationEmail } from "../utils/emailService.js";
 import { OAuth2Client } from "google-auth-library";
 
-// ✅ Use separate Google Login client (NOT your calendar one)
+// Use separate Google Login client (NOT your calendar one)
 const client = new OAuth2Client(process.env.GOOGLE_LOGIN_CLIENT_ID);
 
-// ✅ REGISTER USER (with verification)
+// REGISTER USER (with verification)
 export const registerUser = async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
@@ -49,7 +49,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-// ✅ GOOGLE LOGIN
+// GOOGLE LOGIN
 export const googleLogin = async (req, res) => {
   try {
     const { credential } = req.body;
@@ -90,7 +90,7 @@ export const googleLogin = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    // ✅ Store token in cookie for session persistence
+    //  Store token in cookie for session persistence
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
@@ -116,7 +116,7 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-// ✅ LOGIN USER (with reCAPTCHA)
+// LOGIN USER (with reCAPTCHA)
 export const loginUser = async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
@@ -144,7 +144,7 @@ export const loginUser = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    // ✅ Store token in httpOnly cookie (for persistence)
+    //  Store token in httpOnly cookie (for persistence)
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
@@ -170,7 +170,7 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// ✅ LOGOUT USER
+//  LOGOUT USER
 export const logoutUser = async (req, res) => {
   try {
     res.clearCookie("token", {
@@ -189,7 +189,7 @@ export const logoutUser = async (req, res) => {
   }
 };
 
-// ✅ CHECK AUTH (auto-login persistence)
+// CHECK AUTH (auto-login persistence)
 export const checkAuth = async (req, res) => {
   try {
     const token = req.cookies.token;
@@ -206,7 +206,7 @@ export const checkAuth = async (req, res) => {
   }
 };
 
-// ✅ FORGOT PASSWORD
+//  FORGOT PASSWORD
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -241,7 +241,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// ✅ RESET PASSWORD
+//  RESET PASSWORD
 export const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
@@ -266,7 +266,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ✅ VERIFY EMAIL
+// VERIFY EMAIL
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;

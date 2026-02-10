@@ -1,4 +1,3 @@
-// backend/src/controllers/ProductController.js
 import Product from "../models/Product.js";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
@@ -24,7 +23,7 @@ const uploadBufferToCloudinary = (buffer, options = {}) => {
   });
 };
 
-// -------------------- CONTROLLERS --------------------
+
 
 // Admin: Get all products (for admin)
 export const getAllProducts = async (req, res) => {

@@ -1,4 +1,3 @@
-// productRoutes.js
 import express from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
@@ -31,10 +30,7 @@ const uploadBufferToCloudinary = (buffer) =>
     stream.end(buffer);
   });
 
-// ------------------ ROUTES ------------------
 
-// Add new product (Admin only)
-// REPLACED inline handler with controller to keep logic in one place
 router.post("/add", authMiddleware, upload.single("image"), ProductController.createProduct);
 
 // Get all products (for Admin)
@@ -48,7 +44,7 @@ router.get("/get-all", async (req, res) => {
   }
 });
 
-// Public route for customer/shop frontend (list)
+
 router.get("/get", async (req, res) => {
   try {
     const { sortBy } = req.query;
@@ -74,10 +70,7 @@ router.get("/get", async (req, res) => {
   }
 });
 
-// ------------------ ADDED MINIMAL ROUTES ------------------
 
-// Admin-style single-get: /api/admin/products/get/:id
-// (Your frontend attempted this endpoint; adding it prevents those 404s)
 router.get("/get/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -92,7 +85,7 @@ router.get("/get/:id", async (req, res) => {
   }
 });
 
-// Shop-style single-get: /api/shop/products/:id
+
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -112,7 +105,7 @@ router.get("/:id", async (req, res) => {
 // Edit product (Admin) — matches frontend PUT /api/admin/products/edit/:id
 router.put("/edit/:id", authMiddleware, upload.single("image"), ProductController.editProduct);
 console.log("productRoutes: registered PUT /api/admin/products/edit/:id");
-// Delete product (Admin) — matches frontend DELETE /api/admin/products/delete/:id
+
 router.delete("/delete/:id", authMiddleware, ProductController.deleteProduct);
 
 // --------------------------------------------------------------

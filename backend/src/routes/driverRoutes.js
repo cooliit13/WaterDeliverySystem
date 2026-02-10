@@ -1,4 +1,3 @@
-// routes/driverRoutes.js
 import express from "express";
 import multer from "multer";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -15,14 +14,11 @@ import {
   getAllDriversAdmin,
 } from "../controllers/driverController.js";
 
-// markOrderDelivered lives in orderController (reused by driver)
 import { markOrderDelivered } from "../controllers/orderController.js";
 
 const router = express.Router();
 
-/* ---------------------------------------------
-   CLOUDINARY upload uses memoryStorage
----------------------------------------------- */
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 

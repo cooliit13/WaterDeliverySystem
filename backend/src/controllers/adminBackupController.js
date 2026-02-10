@@ -1,4 +1,4 @@
-// backend/src/controllers/adminBackupController.js
+
 import Product from "../models/Product.js";
 import Order from "../models/order.js";
 import Customer from "../models/customer.js";
@@ -9,13 +9,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-/**
- * createBackupExport
- * - Collects core collections into a single JSON object
- * - Streams it back as a downloadable attachment: admin-backup-<iso>.json
- *
- * Note: this is meant for on-demand exports and convenience. Use Atlas snapshots for production backup/restore.
- */
+
 export const createBackupExport = async (req, res) => {
   try {
     // SECURITY: allow only admins (assumes authMiddleware already ran and req.user.role available)

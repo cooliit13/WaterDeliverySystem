@@ -1,4 +1,3 @@
-// backend/src/routes/adminRoutes.js
 import express from "express";
 import {
   getAllUsers,
@@ -6,7 +5,7 @@ import {
   deleteUser,
   getAllCustomers,
   getAllDrivers,
-  updateUserRole, // <-- ADDED import
+  updateUserRole,
 } from "../controllers/adminController.js";
 import { createDriverAccount } from "../controllers/driverController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -30,11 +29,7 @@ router.get("/users", authMiddleware, adminOnly, getAllUsers);
 router.put("/users/:id/status", authMiddleware, adminOnly, updateUserStatus);
 router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
 
-// ---------- NEW: Guarded role update (first-editor-wins) ----------
-/**
- * Accepts either PUT or PATCH to match frontend usage.
- * Body: { role: "...", clientUpdatedAt: "<ISO string>" }
- */
+
 router.put("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
 router.patch("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
 // ------------------------------------------------------------------
@@ -59,7 +54,7 @@ router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// ✅ Get order details
+//  Get order details
 router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -76,7 +71,7 @@ router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) =>
   }
 });
 
-// ✅ Update order status
+//  Update order status
 router.put("/orders/update/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { orderStatus } = req.body;

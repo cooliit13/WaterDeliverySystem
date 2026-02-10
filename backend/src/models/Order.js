@@ -1,4 +1,3 @@
-// backend/src/models/order.js
 import mongoose from "mongoose";
 
 const OrderItemSchema = new mongoose.Schema({
@@ -8,11 +7,10 @@ const OrderItemSchema = new mongoose.Schema({
     required: false,
   },
   productName: { type: String, required: true },
-  quantity: { type: Number, required: true },         // ordered qty
-  deliveredQty: { type: Number, default: 0 },         // how many delivered
+  quantity: { type: Number, required: true },        
+  deliveredQty: { type: Number, default: 0 },         
   price: { type: Number, required: true },
 
-  // per-item fields (kept for compatibility; not used in simplified Option A)
   customerRating: { type: Number, min: 0, max: 5 },
   customerFeedback: { type: String },
 });
@@ -72,11 +70,11 @@ const orderSchema = new mongoose.Schema(
       lng: { type: Number },
     },
 
-    // ---------- Option A: General ratings/feedback ----------
-    productRating: { type: Number, min: 0, max: 5 }, // general product rating for the order
+    
+    productRating: { type: Number, min: 0, max: 5 }, 
     productFeedback: { type: String },
 
-    driverRating: { type: Number, min: 0, max: 5 },  // rating for the driver
+    driverRating: { type: Number, min: 0, max: 5 }, 
     driverFeedback: { type: String },
 
     // prevent double submission

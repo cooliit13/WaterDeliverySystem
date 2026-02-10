@@ -1,4 +1,3 @@
-// backend/src/routes/productStockRoutes.js
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import Product from "../models/Product.js";
@@ -6,13 +5,10 @@ import Admin from "../models/admin.js";
 
 const router = express.Router();
 
-// 1 minute cooldown (same as users)
+
 const COOLDOWN_MS = 60 * 1000;
 
-/**
- * Legacy route (absolute set) — KEEP FOR BACKWARDS COMPATIBILITY.
- * This does NOT enforce timestamp guarding, but will stamp updatedBy & updatedAt.
- */
+
 router.put("/stock/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -48,21 +44,6 @@ router.put("/stock/:id", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * Guarded stock endpoint — first-editor-wins + 1-minute cooldown
- * POST /api/admin/products/:id/stock
- *
- * Body can be either:
- *  - { newStock: Number, clientUpdatedAt?: "<ISO string>" }   // set absolute
- *  - { delta: Number, clientUpdatedAt?: "<ISO string>" }      // increment/decrement
- *
- * If clientUpdatedAt provided -> server ensures product.updatedAt === clientUpdatedAt
- *   (if not, respond 409 with current product)
- *
- * If clientUpdatedAt not provided -> treat as legacy (apply change), but we still stamp updatedBy/updatedAt.
- *
- * On cooldown -> respond 429 with waitSeconds, updatedBy and current product.
- */
 router.post("/:id/stock", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;

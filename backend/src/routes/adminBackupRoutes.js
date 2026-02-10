@@ -1,4 +1,3 @@
-// backend/src/routes/adminBackupRoutes.js
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { createBackupExport } from "../controllers/adminBackupController.js";

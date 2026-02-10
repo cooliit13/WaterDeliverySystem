@@ -1,12 +1,11 @@
-// backend/src/routes/calendarRoutes.js
 import express from "express";
-import { authMiddleware } from "../middleware/authMiddleware.js"; // adjust path if needed
+import { authMiddleware } from "../middleware/authMiddleware.js"; 
 import Order from "../models/order.js";
 import { createEventForOrder } from "../utils/googleCalendar.js";
 
 const router = express.Router();
 
-// admin-only: create calendar event for an order id and return Google's response
+// admin-only
 router.post("/orders/:id/calendar", authMiddleware, async (req, res) => {
   try {
     const orderId = req.params.id;

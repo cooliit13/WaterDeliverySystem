@@ -1,4 +1,4 @@
-// server.js
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -25,6 +25,8 @@ import adminUserRoutes from "./routes/adminUserRoutes.js";
 import http from "http";
 import { Server as IOServer } from "socket.io";
 import adminBackupRoutes from "./routes/adminBackupRoutes.js";
+import backup from "./google/backup.js";
+
 
 dotenv.config();
 connectDB();
@@ -178,4 +180,35 @@ function listRoutes() {
 
 listRoutes();
 
+// ---------- START DRIVE BACKUP ----------
+try {
+  // start scheduled backups (if GDRIVE_BACKUP_INTERVAL_MS set)
+  if (backup && typeof backup.startAutoBackup === "function") {
+    backup.startAutoBackup();
+    console.log("[Server] GDrive backup module started.");
+  } else {
+    console.warn("[Server] Backup module not available or missing startAutoBackup().");
+  }
+
+  // Add small admin route to trigger a one-off backup (useful for testing)
+  app.post("/api/admin/backup/run-now", async (req, res) => {
+    try {
+      if (!backup || typeof backup.runBackupNow !== "function") {
+        return res.status(500).json({ success: false, message: "Backup module not available" });
+      }
+      const result = await backup.runBackupNow({ keepLocal: false });
+      if (result.success) return res.json({ success: true, file: result.file });
+      return res.status(500).json({ success: false, error: result.error || "Unknown" });
+    } catch (err) {
+      console.error("Manual backup endpoint error:", err);
+      return res.status(500).json({ success: false, message: err.message || String(err) });
+    }
+  });
+} catch (err) {
+  console.error("Failed to start backup module:", err);
+}
+
+// start http server
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+backup.startAutoBackup();
+console.log("[Server] GDrive backup module started.");

@@ -1,4 +1,3 @@
-// routes/adminPosRoutes.js
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import * as PosController from "../controllers/PosController.js";

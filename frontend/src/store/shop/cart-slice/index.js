@@ -1,21 +1,11 @@
-import axios from "axios";
+import api from "../../../utils/axiosInstance"; // <- relative import to axiosinstance
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-const API = "http://localhost:5000/api/shop/cart";
+const API = "/shop/cart"; // axiosinstance already has baseURL = /api
 
 const initialState = {
   cartItems: { items: [] },
   isLoading: false,
-};
-
-// Attach token
-const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
-    },
-  };
 };
 
 // ✅ ADD ITEM (correct endpoint)
@@ -23,12 +13,7 @@ export const addToCart = createAsyncThunk(
   "cart/addToCart",
   async ({ productId, quantity }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(
-        `${API}/add`,
-        { productId, quantity },
-        getAuthHeader()
-      );
-
+      const response = await api.post(`${API}/add`, { productId, quantity });
       return response.data.cart;
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: "Add failed" });
@@ -41,7 +26,7 @@ export const fetchCartItems = createAsyncThunk(
   "cart/fetchCartItems",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API}/get`, getAuthHeader());
+      const response = await api.get(`${API}/get`);
       return response.data.cart;
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: "Fetch failed" });
@@ -54,10 +39,7 @@ export const deleteCartItem = createAsyncThunk(
   "cart/deleteCartItem",
   async (productId, { rejectWithValue }) => {
     try {
-      const response = await axios.delete(
-        `${API}/remove/${productId}`,
-        getAuthHeader()
-      );
+      const response = await api.delete(`${API}/remove/${productId}`);
       return response.data.cart;
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: "Delete failed" });
@@ -70,12 +52,7 @@ export const updateCartQuantity = createAsyncThunk(
   "cart/updateCartQuantity",
   async ({ productId, quantity }, { rejectWithValue }) => {
     try {
-      const response = await axios.put(
-        `${API}/update`,
-        { productId, quantity },
-        getAuthHeader()
-      );
-
+      const response = await api.put(`${API}/update`, { productId, quantity });
       return response.data.cart;
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: "Update failed" });
@@ -96,7 +73,6 @@ const shoppingCartSlice = createSlice({
       // ADD TO CART
       .addCase(addToCart.fulfilled, (state, action) => {
         state.cartItems = action.payload;
-
       })
 
       // FETCH

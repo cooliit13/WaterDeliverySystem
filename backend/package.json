@@ -12,17 +12,21 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "fs-extra": "^11.3.2",
     "google-auth-library": "^10.5.0",
     "googleapis": "^166.0.0",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^7.0.0",
     "mongoose": "^8.19.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.9",
     "passport": "^0.7.0",
@@ -32,5 +36,17 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+
+  "nodemonConfig": {
+    "watch": ["src"],
+    "ignore": [
+      "tmp/*",
+      "src/google/token.json",
+      ".env",
+      "node_modules/**",
+      ".git/**"
+    ],
+    "ext": "js,mjs,json"
   }
 }

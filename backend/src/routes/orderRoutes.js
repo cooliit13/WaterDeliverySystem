@@ -1,19 +1,18 @@
-// backend/src/routes/orderRoutes.js
 import express from "express";
 import Order from "../models/order.js";
-import { markOrderDelivered, requestPurchase, getDriverOrders, getBookedDeliveryDates, updateOrderStatus, approveAndAssignDriver } from "../controllers/orderController.js";
+import {
+  markOrderDelivered,
+  requestPurchase,
+  getDriverOrders,
+  getBookedDeliveryDates,
+  updateOrderStatus,
+  approveAndAssignDriver,
+  cancelOrder,
+} from "../controllers/orderController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
-/* ---------------------------------------------
-  CUSTOMER REQUEST PURCHASE
----------------------------------------------- */
 router.post("/request-purchase", requestPurchase);
-
-/* ---------------------------------------------
-  ADMIN: GET ALL PENDING ORDERS
----------------------------------------------- */
 router.get("/pending", async (req, res) => {
   try {
     const orders = await Order.find({ status: "pending" }).sort({ createdAt: -1 });
@@ -24,9 +23,6 @@ router.get("/pending", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: APPROVE ORDER
----------------------------------------------- */
 router.put("/admin/orders/approve", async (req, res) => {
   try {
     const { orderId, driverId } = req.body;
@@ -45,9 +41,7 @@ router.put("/admin/orders/approve", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: CANCEL ORDER
----------------------------------------------- */
+
 router.put("/cancel/:orderId", async (req, res) => {
   try {
     const order = await Order.findById(req.params.orderId);
@@ -63,9 +57,7 @@ router.put("/cancel/:orderId", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  USER: GET ALL ORDERS BY USER (populated product names)
----------------------------------------------- */
+
 router.get("/user/:id", async (req, res) => {
   try {
     const orders = await Order.find({ customerId: req.params.id })
@@ -79,9 +71,7 @@ router.get("/user/:id", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  USER: GET ORDER DETAILS (populated)
----------------------------------------------- */
+
 router.get("/details/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -95,9 +85,9 @@ router.get("/details/:id", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: GET ALL ORDERS
----------------------------------------------- */
+router.delete("/:id/cancel", authMiddleware, cancelOrder); //cancel order
+
+
 router.get("/admin/orders/get", async (req, res) => {
   try {
     const orders = await Order.find().populate("customerId", "firstname lastname").sort({ createdAt: -1 });
@@ -108,9 +98,7 @@ router.get("/admin/orders/get", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: GET ORDER DETAILS
----------------------------------------------- */
+
 router.get("/admin/orders/details/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id).populate("customerId", "firstname lastname");
@@ -122,9 +110,7 @@ router.get("/admin/orders/details/:id", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: UPDATE ORDER STATUS
----------------------------------------------- */
+
 router.put("/admin/orders/update/:id", async (req, res) => {
   try {
     const { orderStatus } = req.body;
@@ -137,9 +123,7 @@ router.put("/admin/orders/update/:id", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  DRIVER: GET ASSIGNED ORDERS
----------------------------------------------- */
+
 router.get("/driver/:driverId", async (req, res) => {
   try {
     const { driverId } = req.params;
@@ -153,9 +137,7 @@ router.get("/driver/:driverId", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  USER: SUBMIT GENERAL FEEDBACK FOR ORDER (Option A)
----------------------------------------------- */
+
 router.post("/:orderId/feedback", authMiddleware, async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -210,9 +192,7 @@ router.post("/:orderId/feedback", authMiddleware, async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: GET ALL FEEDBACKS
----------------------------------------------- */
+
 router.get("/admin/feedbacks", async (req, res) => {
   try {
     const orders = await Order.find({
@@ -235,10 +215,7 @@ router.get("/admin/feedbacks", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  ADMIN: AGGREGATED PRODUCT / DRIVER RATINGS
-  (kept as-is — unchanged)
----------------------------------------------- */
+
 router.get("/admin/ratings/products", async (req, res) => {
   try {
     const pipeline = [
@@ -288,9 +265,7 @@ router.get("/admin/ratings/drivers", async (req, res) => {
   }
 });
 
-/* ---------------------------------------------
-  DRIVER or ADMIN — MARK ORDER AS DELIVERED
----------------------------------------------- */
+
 router.put("/:orderId/deliver", markOrderDelivered);
 
 export default router;

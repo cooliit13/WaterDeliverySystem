@@ -1,19 +1,7 @@
-// backend/src/controllers/dashboardController.js
 import mongoose from "mongoose";
 import Order from "../models/order.js";
 import Product from "../models/Product.js";
 
-/**
- * Returns dashboard summary including:
- * - daily target
- * - totalDeliveredToday
- * - revenueToday (delivery)
- * - posRevenueToday (walk-in)
- * - totalStock
- * - deliveryRevenueAllTime
- * - posRevenueAllTime
- * - totalRevenueAllTime
- */
 export const getDashboardSummary = async (req, res) => {
   try {
     const DAILY_TARGET = 200;
@@ -71,8 +59,6 @@ export const getDashboardSummary = async (req, res) => {
       (deliveredAllTimeAgg[0] && deliveredAllTimeAgg[0].deliveryRevenueAllTime) || 0;
 
     // --- POS (walk-in) sales
-    // We don't know exact collection name. Try a few common ones and sum if present.
-    // We'll use raw collection access to avoid requiring a model that may not exist.
     const conn = mongoose.connection;
     const possibleCollections = ["pos", "possales", "pos_sales", "sales", "walkin_sales", "posSales"];
     let posRevenueToday = 0;

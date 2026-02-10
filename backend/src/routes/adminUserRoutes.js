@@ -1,14 +1,9 @@
-// backend/src/routes/adminUserRoutes.js
 import express from "express";
 import User from "../models/User.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-/**
- * GET ALL USERS
- * GET /api/admin/users
- */
 router.get("/users", authMiddleware, async (req, res) => {
   try {
     const users = await User.find({}, "firstname lastname email role phone status")
@@ -30,10 +25,7 @@ router.get("/users", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * GET ALL DRIVERS
- * GET /api/admin/drivers
- */
+
 router.get("/drivers", authMiddleware, async (req, res) => {
   try {
     const drivers = await User.find({ role: "driver" }, "firstname lastname phone status")
@@ -53,10 +45,6 @@ router.get("/drivers", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * PATCH: UPDATE ROLE
- * PATCH /api/admin/users/:id/role
- */
 router.patch("/users/:id/role", authMiddleware, async (req, res) => {
   try {
     const { role } = req.body;
@@ -70,10 +58,7 @@ router.patch("/users/:id/role", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * PATCH: TOGGLE DRIVER STATUS
- * PATCH /api/admin/drivers/:id/status
- */
+
 router.patch("/drivers/:id/status", authMiddleware, async (req, res) => {
   try {
     const { status } = req.body;

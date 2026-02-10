@@ -1,18 +1,13 @@
-// backend/src/controllers/driverController.js
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Driver from "../models/driver.js";
-import User from "../models/User.js"; // fallback: some drivers may live in users collection
+import User from "../models/User.js"; 
 import Order from "../models/order.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
-
-// use delivery processing helper so proof upload also updates stock/deliveredQty
 import { processDelivery } from "./orderController.js";
 
-/**
- * ADMIN: createDriverAccount
- */
+
 export const createDriverAccount = async (req, res) => {
   try {
     const { name, email, password, contactNumber, vehicleNumber } = req.body;
@@ -42,9 +37,6 @@ export const createDriverAccount = async (req, res) => {
   }
 };
 
-/**
- * registerDriver - public registration for drivers
- */
 export const registerDriver = async (req, res) => {
   try {
     const { name, email, password, contactNumber, vehicleNumber } = req.body;
@@ -70,9 +62,7 @@ export const registerDriver = async (req, res) => {
   }
 };
 
-/**
- * loginDriver
- */
+
 export const loginDriver = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -184,14 +174,6 @@ export const updateDeliveryStatus = async (req, res) => {
   }
 };
 
-/**
- * uploadProofOfDelivery
- * - expects multer memoryStorage (req.file.buffer exists)
- * - uploads to Cloudinary and stores secure URL in order.proofOfDelivery
- * - sets order.status = 'completed'
- * - marks driver available again
- * - calls processDelivery(...) so product stock & deliveredQty are updated
- */
 export const uploadProofOfDelivery = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -262,11 +244,7 @@ export const uploadProofOfDelivery = async (req, res) => {
   }
 };
 
-/**
- * getAllDriversAdmin
- * - Returns list of drivers for admin UI.
- * - Tries Driver model first; if empty uses User collection filtered by role: "driver"
- */
+
 export const getAllDriversAdmin = async (req, res) => {
   try {
     // Prefer dedicated Driver collection if it has entries

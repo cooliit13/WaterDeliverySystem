@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
     unique: true,
-    sparse: true, // Allows multiple docs with null googleId
+    sparse: true,
   },
   verificationToken: { 
     type: String, 
@@ -37,13 +37,13 @@ const userSchema = new mongoose.Schema({
     default: 'customer',
   },
 
-  // ✅ Profile image field
+  //  Profile image field
   profileImage: {
     type: String,
     default: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
   },
 
-  // ✅ NEW: Google OAuth tokens for Calendar integration
+  //  NEW: Google OAuth tokens for Calendar integration
   googleTokens: {
     access_token: String,
     refresh_token: String,

@@ -1,4 +1,3 @@
-// scripts/tx-deduct-order.js
 const { MongoClient, ObjectId } = require('mongodb');
 const MONGO = process.env.MONGO_URI || 'your_mongo_uri_here';
 const ORDER_ID = process.argv[2];

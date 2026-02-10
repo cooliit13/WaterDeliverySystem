@@ -1,6 +1,8 @@
+// AdminDashboard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProductImageUpload from "@/components/admin-view/image-upload";
+import Archives from "./Archives";
 import { Button } from "@/components/ui/button";
 import {
   addFeatureImage,
@@ -11,6 +13,7 @@ import {
 import * as XLSX from "xlsx";
 import axios from "axios";
 import { useToast } from "@/components/ui/use-toast";
+import AcquaLogo from "@/assets/pictures/LOGO/AcquaLogo.png";
 
 function AdminDashboard() {
   // ======= Feature Image State =======
@@ -71,6 +74,34 @@ function AdminDashboard() {
   const [podGalleryOpen, setPodGalleryOpen] = useState(false);
   const [podGalleryUrls, setPodGalleryUrls] = useState([]);
   const [podGalleryIndex, setPodGalleryIndex] = useState(0);
+
+  // ======= Show/hide control for walk-in sales list =======
+  const [showAllPosSales, setShowAllPosSales] = useState(false);
+  const POS_VISIBLE_COUNT = 5;
+
+  // ======= Archives state (persisted to localStorage) =======
+  const [archives, setArchives] = useState(() => {
+    try {
+      const raw = localStorage.getItem("adminArchives");
+      return raw
+        ? JSON.parse(raw)
+        : { posSales: [], adminOrders: [], expenseMonths: [] };
+    } catch {
+      return { posSales: [], adminOrders: [], expenseMonths: [] };
+    }
+  });
+
+  // Persist archives to localStorage when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem("adminArchives", JSON.stringify(archives));
+    } catch (e) {
+      console.error("Failed to persist archives", e);
+    }
+  }, [archives]);
+
+  // Control Archives modal visibility (parent-controlled)
+  const [archivesOpen, setArchivesOpen] = useState(false);
 
   // ======= Load feature images =======
   useEffect(() => {
@@ -251,22 +282,185 @@ function AdminDashboard() {
     }
   }
 
-  // ======= Current form total =======
-  const totalCost = useMemo(() => {
-    return (
-      Number(electric || 0) +
-      Number(water || 0) +
-      Number(gas || 0) +
-      Number(other || 0)
-    );
-  }, [electric, water, gas, other]);
+  // ======= Generate Weekly PDF (with logo) =======
+  function generateWeeklyPdf() {
+    const rowsHtml = weekDayTotals
+      .map(
+        (d) => `
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd">${d.display}</td>
+        <td style="padding:8px;border:1px solid #ddd">₱${d.pos.toFixed(2)}</td>
+        <td style="padding:8px;border:1px solid #ddd">₱${d.delivery.toFixed(2)}</td>
+        <td style="padding:8px;border:1px solid #ddd">₱${d.total.toFixed(2)}</td>
+      </tr>`
+      )
+      .join("");
 
-  // ======= NEW: Fetch POS (walk-in) sales and dashboard summary and admin orders =======
+    const grandPos = weekDayTotals.reduce((s, x) => s + x.pos, 0);
+    const grandDelivery = weekDayTotals.reduce((s, x) => s + x.delivery, 0);
+    const grandTotal = weekDayTotals.reduce((s, x) => s + x.total, 0);
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Weekly Sales Summary (Mon–Sat)</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+            h1 { font-size: 22px; margin-bottom: 10px; text-align:center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+            th { background: #f5f5f5; }
+            tfoot td { font-weight: bold; background: #fafafa; }
+            .logo { width: 120px; display:block; margin:0 auto 10px auto; }
+          </style>
+        </head>
+        <body>
+
+          <img src="${AcquaLogo}" class="logo" />
+          <h1>Weekly Sales Summary (Mon–Sat)</h1>
+          <p style="text-align:center;"> ${new Date().toLocaleString()}</p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>POS</th>
+                <th>Delivery</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Grand Total</td>
+                <td>₱${grandPos.toFixed(2)}</td>
+                <td>₱${grandDelivery.toFixed(2)}</td>
+                <td>₱${grandTotal.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+        </body>
+      </html>
+    `;
+
+    const w = window.open("", "_blank");
+    if (!w) return alert("Pop-up blocked. Allow pop-ups to print PDF.");
+    w.document.write(htmlContent);
+    w.document.close();
+    w.print();
+  }
+
+  // ======= Generate Monthly PDF (with logo) =======
+  function generateMonthlyPdf() {
+    const now = new Date();
+    const monthLabel = now.toLocaleString(undefined, { month: "long", year: "numeric" });
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Monthly Totals — ${monthLabel}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+            h1 { text-align:center; font-size: 22px; margin-bottom: 10px; }
+            .logo { width: 120px; display:block; margin:0 auto 10px auto; }
+            .card { border:1px solid #e6e6e6; padding:20px; border-radius:8px; margin-top:20px; }
+            .row { display:flex; justify-content:space-between; margin-bottom:10px; }
+            .label { color:#555; }
+            .value { font-weight:700; font-size:1.1rem; }
+          </style>
+        </head>
+        <body>
+
+          <img src="${AcquaLogo}" class="logo" />
+          <h1>Monthly Sales Report — ${monthLabel}</h1>
+          <p style="text-align:center;"> ${new Date().toLocaleString()}</p>
+
+          <div class="card">
+            <div class="row"><div class="label">Delivery Revenue</div><div class="value">₱${monthlyTotals.deliveryMonth.toFixed(2)}</div></div>
+            <div class="row"><div class="label">POS Revenue</div><div class="value">₱${monthlyTotals.posMonth.toFixed(2)}</div></div>
+            <div class="row"><div class="label">Total Revenue</div><div class="value">₱${monthlyTotals.totalMonth.toFixed(2)}</div></div>
+          </div>
+
+        </body>
+      </html>
+    `;
+
+    const w = window.open("", "_blank");
+    if (!w) return alert("Pop-up blocked. Allow pop-ups to print PDF.");
+    w.document.write(htmlContent);
+    w.document.close();
+    w.print();
+  }
+
+  // ======= Archive helpers =======
+  function archivePosSale(id) {
+    setPosSales((prev) => {
+      const item = prev.find((p) => (p._id || p.id) === id);
+      if (!item) return prev;
+      setArchives((a) => ({ ...a, posSales: [item, ...a.posSales] }));
+      return prev.filter((p) => (p._id || p.id) !== id);
+    });
+  }
+
+  function restorePosSale(item) {
+    setPosSales((prev) => [item, ...prev]);
+    setArchives((a) => ({ ...a, posSales: a.posSales.filter((p) => (p._id || p.id) !== (item._id || item.id)) }));
+  }
+
+  function deleteArchivedPosSale(id) {
+    setArchives((a) => ({ ...a, posSales: a.posSales.filter((p) => (p._id || p.id) !== id) }));
+  }
+
+  function archiveOrder(id) {
+    setAdminOrders((prev) => {
+      const item = prev.find((o) => (o._id || o.id) === id);
+      if (!item) return prev;
+      setArchives((a) => ({ ...a, adminOrders: [item, ...a.adminOrders] }));
+      return prev.filter((o) => (o._id || o.id) !== id);
+    });
+  }
+
+  function restoreOrder(item) {
+    setAdminOrders((prev) => [item, ...prev]);
+    setArchives((a) => ({ ...a, adminOrders: a.adminOrders.filter((o) => (o._id || o.id) !== (item._id || item.id)) }));
+  }
+
+  function deleteArchivedOrder(id) {
+    setArchives((a) => ({ ...a, adminOrders: a.adminOrders.filter((o) => (o._id || o.id) !== id) }));
+  }
+
+  function archiveExpenseMonth(monthKey) {
+    const group = groupedByMonth.find((g) => g.month === monthKey);
+    if (!group) return;
+    setExpenseHistory((prev) => prev.filter((e) => {
+      const d = new Date(e.dateISO);
+      const mk = d.toLocaleString("default", { month: "long", year: "numeric" });
+      return mk !== monthKey;
+    }));
+    setArchives((a) => ({ ...a, expenseMonths: [group, ...a.expenseMonths] }));
+  }
+
+  function restoreExpenseMonth(group) {
+    setExpenseHistory((prev) => {
+      const restored = [...group.entries, ...prev];
+      restored.sort((x, y) => new Date(y.dateISO) - new Date(x.dateISO));
+      return restored;
+    });
+    setArchives((a) => ({ ...a, expenseMonths: a.expenseMonths.filter((g) => g.month !== group.month) }));
+  }
+
+  function deleteArchivedExpenseMonth(monthKey) {
+    setArchives((a) => ({ ...a, expenseMonths: a.expenseMonths.filter((g) => g.month !== monthKey) }));
+  }
+
+  // ======= NEW: Fetch POS, dashboard summary, admin orders =======
   useEffect(() => {
     const token = localStorage.getItem("token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-    // fetch pos list
     setPosLoading(true);
     axios
       .get("http://localhost:5000/api/admin/pos/list", { headers })
@@ -280,17 +474,13 @@ function AdminDashboard() {
       })
       .finally(() => setPosLoading(false));
 
-    // fetch dashboard summary (optional backend)
     axios
       .get("http://localhost:5000/api/admin/dashboard/summary", { headers })
       .then((res) => {
         if (res.data?.success) setDashboardSummary(res.data);
       })
-      .catch(() => {
-        // summary optional — ignore failure
-      });
+      .catch(() => {});
 
-    // fetch admin orders (used to compute delivery daily/monthly totals)
     setOrdersLoading(true);
     axios
       .get("http://localhost:5000/api/admin/orders/get", { headers })
@@ -298,8 +488,6 @@ function AdminDashboard() {
         const orders = res.data?.orders ?? res.data ?? [];
         setAdminOrders(Array.isArray(orders) ? orders : []);
 
-        // ALSO fetch products to build a productId -> title map so dashboard can resolve names
-        // (only if we actually have orders)
         try {
           if (Array.isArray(orders) && orders.length > 0) {
             const prodRes = await axios.get("http://localhost:5000/api/admin/products/get", { headers });
@@ -327,10 +515,8 @@ function AdminDashboard() {
   // ======= Date helper =======
   const parseToDay = (v) => {
     if (!v) return null;
-    // If v already a Date or ISO string
     const d = new Date(v);
     if (Number.isNaN(d.getTime())) return null;
-    // normalize to start of day
     d.setHours(0, 0, 0, 0);
     return d;
   };
@@ -340,7 +526,6 @@ function AdminDashboard() {
     let start = filterStart ? parseToDay(filterStart) : null;
     let end = filterEnd ? parseToDay(filterEnd) : null;
     if (end) {
-      // include the whole day
       end.setHours(23, 59, 59, 999);
     }
 
@@ -350,7 +535,6 @@ function AdminDashboard() {
     };
 
     const orderRefDate = (o) => {
-      // prefer deliveryDate, then updatedAt, then createdAt
       return new Date(o.deliveryDate || o.updatedAt || o.createdAt || null);
     };
 
@@ -370,15 +554,12 @@ function AdminDashboard() {
       return true;
     });
 
-    // compute totals
     const posSum = posFiltered.reduce((s, sale) => {
       const val = Number(sale.totals?.total ?? sale.total ?? 0) || 0;
       return s + val;
     }, 0);
 
-    // For deliveries we compute revenue from items (delivered qty if present)
     const deliverySum = ordersFiltered.reduce((s, o) => {
-      // Use items revenue
       const items = Array.isArray(o.items) ? o.items : [];
       const revenue = items.reduce((acc, it) => {
         const qty = Number(it.deliveredQty ?? it.quantity ?? it.qty ?? 0);
@@ -402,8 +583,7 @@ function AdminDashboard() {
   // ======= Helper: start of week (Mon) given a date =======
   const getStartOfWeekMonday = (d) => {
     const dt = new Date(d);
-    const day = dt.getDay(); // 0=Sun,1=Mon...
-    // calculate distance to Monday
+    const day = dt.getDay();
     const diffToMon = (day === 0 ? -6 : 1 - day);
     const monday = new Date(dt);
     monday.setDate(dt.getDate() + diffToMon);
@@ -413,7 +593,6 @@ function AdminDashboard() {
 
   // ======= Compute Monday->Saturday totals for current week =======
   const weekDayTotals = useMemo(() => {
-    // build an array of 6 days: Monday..Saturday for current week
     const now = new Date();
     const monday = getStartOfWeekMonday(now);
     const days = [];
@@ -424,10 +603,8 @@ function AdminDashboard() {
       days.push(d);
     }
 
-    // helper to compare date (YYYY-MM-DD)
     const dateKey = (date) => date.toISOString().split("T")[0];
 
-    // precompute POS map by date
     const posByDate = {};
     posSales.forEach((s) => {
       const created = s.createdAt ? new Date(s.createdAt) : s.date ? new Date(s.date) : null;
@@ -437,30 +614,22 @@ function AdminDashboard() {
       posByDate[key] = (posByDate[key] || 0) + val;
     });
 
-    // precompute deliveries by date (use updatedAt if completed, else deliveryDate/createdAt)
     const deliveryByDate = {};
     adminOrders.forEach((o) => {
-      // only count completed orders for delivered revenue
       if (!o || (o.status && o.status.toLowerCase() !== "completed")) return;
-
-      // choose reference date: prefer updatedAt, then deliveryDate, then createdAt
       let ref = o.updatedAt || o.deliveryDate || o.createdAt || null;
       if (!ref) return;
       ref = new Date(ref);
       const key = dateKey(new Date(ref.setHours(0, 0, 0, 0)));
-
-      // sum revenue from items: use deliveredQty if present, else quantity
       const items = Array.isArray(o.items) ? o.items : [];
       const revenue = items.reduce((s, it) => {
         const qty = Number(it.deliveredQty ?? it.quantity ?? it.qty ?? 0);
         const price = Number(it.price ?? 0);
         return s + qty * price;
       }, 0);
-
       deliveryByDate[key] = (deliveryByDate[key] || 0) + revenue;
     });
 
-    // build result array
     const result = days.map((d) => {
       const key = dateKey(d);
       const pos = posByDate[key] || 0;
@@ -481,14 +650,13 @@ function AdminDashboard() {
   // ======= Monthly totals (current month) =======
   const monthlyTotals = useMemo(() => {
     const now = new Date();
-    const month = now.getMonth(); // 0-based
+    const month = now.getMonth();
     const year = now.getFullYear();
     const monthKeyMatch = (d) => {
       const dt = new Date(d);
       return dt.getMonth() === month && dt.getFullYear() === year;
     };
 
-    // POS monthly sum
     const posMonth = posSales.reduce((s, sale) => {
       const created = sale.createdAt ? new Date(sale.createdAt) : sale.date ? new Date(sale.date) : null;
       if (!created) return s;
@@ -496,10 +664,8 @@ function AdminDashboard() {
       return s + Number(sale.totals?.total ?? sale.total ?? 0);
     }, 0);
 
-    // Delivery monthly sum (only completed orders)
     const deliveryMonth = adminOrders.reduce((s, order) => {
       if (!order || (order.status && order.status.toLowerCase() !== "completed")) return s;
-      // pick a date to check month: updatedAt or deliveryDate or createdAt
       const ref = new Date(order.updatedAt || order.deliveryDate || order.createdAt || 0);
       if (!monthKeyMatch(ref)) return s;
       const items = Array.isArray(order.items) ? order.items : [];
@@ -566,10 +732,7 @@ function AdminDashboard() {
       else if (v?.url && typeof v.url === "string") urls.push(v.url.trim());
     };
 
-    // Primary field (your backend writes to this)
     push(order.proofOfDelivery);
-
-    // Other common names
     push(order.proofImage);
     push(order.deliveryProof);
     if (Array.isArray(order.deliveryProofs)) order.deliveryProofs.forEach((p) => push(p?.image ?? p?.url ?? p));
@@ -577,7 +740,6 @@ function AdminDashboard() {
     if (Array.isArray(order.images)) order.images.forEach((p) => push(p));
     if (Array.isArray(order.pictures)) order.pictures.forEach((p) => push(p));
 
-    // item-level proofs
     if (Array.isArray(order.items)) {
       order.items.forEach((it) => {
         if (!it) return;
@@ -615,6 +777,16 @@ function AdminDashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, [podGalleryOpen, podGalleryUrls.length]);
 
+  // ======= Current form total =======
+  const totalCost = useMemo(() => {
+    return (
+      Number(electric || 0) +
+      Number(water || 0) +
+      Number(gas || 0) +
+      Number(other || 0)
+    );
+  }, [electric, water, gas, other]);
+
   return (
     <div className="p-6 space-y-10">
       {/* Dashboard top row: expenses + quick stats */}
@@ -627,7 +799,6 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* Dashboard summary tile (optional data from backend) */}
         <div className="bg-white p-5 rounded-lg shadow-md border">
           <h3 className="text-lg font-semibold">Daily Summary</h3>
           <div className="mt-3 text-sm text-gray-600">
@@ -637,13 +808,12 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* Walk-in (POS) summary */}
         <div className="bg-white p-5 rounded-lg shadow-md border">
           <h3 className="text-lg font-semibold">Walk-in Sales (POS)</h3>
           <div className="mt-3 text-sm text-gray-600">
             <div>Total Walk-ins: <strong>{posSummary.totalPosCount}</strong></div>
             <div>Sales Today: <strong>{posSummary.salesTodayCount}</strong></div>
-            <div>Revenue Today: <strong>₱{posSummary.todayRevenue.toFixed(2)}</strong></div> 
+            <div>Revenue Today: <strong>₱{posSummary.todayRevenue.toFixed(2)}</strong></div>
             <div className="mt-2 text-xs text-gray-500">Total POS Revenue: ₱{posSummary.totalPosRevenue.toFixed(2)}</div>
           </div>
         </div>
@@ -668,7 +838,6 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* Filter summary */}
         <div className="mt-3 text-sm text-gray-600">
           <div>POS Total (filtered): <strong>₱{filteredTotals.posSum.toFixed(2)}</strong></div>
           <div>Delivery Total (filtered): <strong>₱{filteredTotals.deliverySum.toFixed(2)}</strong></div>
@@ -678,7 +847,13 @@ function AdminDashboard() {
 
       {/* 6-day (Mon-Sat) totals */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
-        <h2 className="text-xl font-semibold mb-3">Weekly (Mon–Sat) Sales</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold mb-3">Weekly (Mon–Sat) Sales</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={generateWeeklyPdf}>Generate PDF</Button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {weekDayTotals.map((d) => (
             <div key={d.date} className="p-3 rounded border bg-gray-50">
@@ -694,7 +869,13 @@ function AdminDashboard() {
 
       {/* Monthly totals */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
-        <h2 className="text-xl font-semibold mb-3">Monthly Totals (This Month)</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold mb-3">Monthly Totals (This Month)</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={generateMonthlyPdf}>Generate PDF</Button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="p-3 rounded border bg-gray-50">
             <div className="text-sm text-gray-600">Delivery Revenue</div>
@@ -711,41 +892,62 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Walk-in Sales list (filtered view) */}
+      {/* Recent Walk-in Sales list (filtered view) with Show/Hide and Archive */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Recent Walk-in Sales (Filtered)</h2>
-          <div className="text-sm text-gray-500">{posLoading ? "Loading…" : `${filteredPosSales.length} shown`}</div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-500">{posLoading ? "Loading…" : `${filteredPosSales.length} shown`}</div>
+          </div>
         </div>
 
         {filteredPosSales.length === 0 ? (
           <p className="text-gray-500">No walk-in sales in this range.</p>
         ) : (
-          <ul className="space-y-3">
-            {filteredPosSales.slice(0, 50).map((sale) => (
-              <li key={sale._id || sale.id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="text-sm text-gray-600 mb-1">
-                    <strong>{sale.customer?.name || sale.customer?.customerName || "Walk-in Customer"}</strong>
-                    <span className="ml-3 text-xs text-gray-400">{new Date(sale.createdAt || sale.date || Date.now()).toLocaleString()}</span>
-                  </div>
+          <>
+            <ul className="space-y-3">
+              {filteredPosSales
+                .slice(0, showAllPosSales ? filteredPosSales.length : POS_VISIBLE_COUNT)
+                .map((sale) => (
+                  <li key={sale._id || sale.id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-600 mb-1">
+                        <strong>{sale.customer?.name || sale.customer?.customerName || "Walk-in Customer"}</strong>
+                        <span className="ml-3 text-xs text-gray-400">{new Date(sale.createdAt || sale.date || Date.now()).toLocaleString()}</span>
+                      </div>
 
-                  <div className="text-sm text-gray-700">
-                    {Array.isArray(sale.items) ? sale.items.map((it) => `${it.name || it.productName || "Item"} x${it.qty || it.quantity || 0}`).join(" • ") : ""}
-                  </div>
-                </div>
+                      <div className="text-sm text-gray-700">
+                        {Array.isArray(sale.items) ? sale.items.map((it) => `${it.name || it.productName || "Item"} x${it.qty || it.quantity || 0}`).join(" • ") : ""}
+                      </div>
+                    </div>
 
-                <div className="ml-4 text-right">
-                  <div className="font-semibold">₱{(sale.totals?.total ?? sale.total ?? 0).toFixed(2)}</div>
-                  <div className="text-xs text-gray-500">{sale.note || ""}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div className="ml-4 text-right flex flex-col items-end">
+                      <div className="font-semibold">₱{(sale.totals?.total ?? sale.total ?? 0).toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">{sale.note || ""}</div>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => archivePosSale(sale._id || sale.id)}>Archive</Button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+
+            {filteredPosSales.length > POS_VISIBLE_COUNT && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAllPosSales((v) => !v)}
+                >
+                  {showAllPosSales ? "Hide" : `Show more (${filteredPosSales.length - POS_VISIBLE_COUNT})`}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Recent Delivery Orders (filtered) */}
+      {/* Recent Delivery Orders (filtered) with Archive */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Delivery Orders (Filtered)</h2>
@@ -755,19 +957,11 @@ function AdminDashboard() {
         {filteredAdminOrders.length === 0 ? (
           <p className="text-gray-500">No delivery orders in this range.</p>
         ) : (
-          // <-- SCROLLABLE container applied ONLY to Delivery Orders list
           <div className="max-h-[320px] overflow-auto pr-2">
             <ul className="space-y-3">
               {filteredAdminOrders.slice(0, 50).map((order) => {
-                // small: gather proof urls for this order
                 const proofUrls = findOrderProofImages(order);
                 const proofUrl = proofUrls.length > 0 ? proofUrls[0] : null;
-
-                // useful debug (optional)
-                if (!proofUrl && (order.status?.toLowerCase?.() === "delivered" || order.status?.toLowerCase?.() === "completed")) {
-                  // eslint-disable-next-line no-console
-                  console.debug("No POD for order:", order._id ?? order.id ?? "(no id)");
-                }
 
                 return (
                   <li key={order._id} className="p-3 rounded-md bg-gray-50 border flex justify-between items-start">
@@ -779,12 +973,10 @@ function AdminDashboard() {
                         </span>
                       </div>
 
-                      {/* Items: vertical list, resolve productId -> title using productMap */}
                       <div className="text-sm text-gray-700">
                         {Array.isArray(order.items) && order.items.length > 0 ? (
                           <div className="flex flex-col gap-1">
                             {order.items.map((it, i) => {
-                              // resolve title: try productId then fallback to embedded fields
                               const prodId = it.productId ?? (typeof it.product === "string" ? it.product : it.product?._id ?? null);
                               const titleFromMap = prodId ? resolveProductTitle(prodId) : null;
                               const embedded = it.productName ?? it.name ?? it.title ?? (it.product && (it.product.title ?? it.product.name)) ?? null;
@@ -803,48 +995,27 @@ function AdminDashboard() {
                       </div>
                     </div>
 
-                    <div className="ml-4 text-right">
-                      {/* compute order revenue quickly */}
+                    <div className="ml-4 text-right flex flex-col items-end">
                       <div className="font-semibold">
                         ₱{(Array.isArray(order.items) ? order.items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.quantity ?? it.qty ?? 0)), 0) : 0).toFixed(2)}
                       </div>
                       <div className="text-xs text-gray-500">{order.status}</div>
 
-                      {/* POD thumbnail (first image) */}
                       {proofUrl && (
                         <img
                           src={proofUrl}
                           alt="POD thumbnail"
                           className="w-[80px] h-[80px] object-cover rounded border mt-2 cursor-pointer"
-                          onClick={() => {
-                            setPodGalleryUrls(proofUrls);
-                            setPodGalleryIndex(0);
-                            setPodGalleryOpen(true);
-                          }}
+                          onClick={() => openPodGallery(proofUrls, 0)}
                           onError={(e) => { e.currentTarget.style.opacity = 0.6; }}
                           title="Click to open POD gallery"
                         />
                       )}
 
-                      {/* Show POD button (works even if no thumbnail shown) */}
-                      <Button
-                        size="sm"
-                        className="mt-2"
-                        onClick={() => {
-                          if (proofUrls.length > 0) {
-                            setPodGalleryUrls(proofUrls);
-                            setPodGalleryIndex(0);
-                            setPodGalleryOpen(true);
-                          } else {
-                            toast({
-                              title: "No proof found",
-                              description: "Driver hasn't uploaded proof for this order yet.",
-                            });
-                          }
-                        }}
-                      >
-                        Show POD
-                      </Button>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" onClick={() => openPodGallery(proofUrls, 0)}>Show POD</Button>
+                        <Button size="sm" variant="outline" onClick={() => archiveOrder(order._id || order.id)}>Archive</Button>
+                      </div>
                     </div>
                   </li>
                 );
@@ -854,7 +1025,7 @@ function AdminDashboard() {
         )}
       </div>
 
-      {/* MONTHLY CARDS (expenses UI remains unchanged) */}
+      {/* MONTHLY CARDS (expenses) with Archive */}
       <div className="bg-white p-5 rounded-lg shadow-md border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Expense Summary by Month</h2>
@@ -879,6 +1050,7 @@ function AdminDashboard() {
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => printMonth(group)}>Print PDF</Button>
                     <Button variant="outline" size="sm" onClick={() => exportMonthToExcel(group)}>Export Excel</Button>
+                    <Button size="sm" variant="outline" onClick={() => archiveExpenseMonth(group.month)}>Archive</Button>
                     <Button variant="secondary" size="sm" onClick={() => toggleMonth(group.month)}>
                       {isCollapsed ? "Show" : "Hide"}
                     </Button>
@@ -999,42 +1171,6 @@ function AdminDashboard() {
         )}
       </div>
 
-      {/* FEATURE IMAGE UPLOAD */}
-      <div>
-        <ProductImageUpload
-          imageFile={imageFile}
-          setImageFile={setImageFile}
-          uploadedImageUrl={uploadedImageUrl}
-          setUploadedImageUrl={setUploadedImageUrl}
-          setImageLoadingState={setImageLoadingState}
-          imageLoadingState={imageLoadingState}
-          isCustomStyling={true}
-        />
-        <Button onClick={handleUploadFeatureImage} className="mt-5 w-full">
-          Upload
-        </Button>
-
-        <div className="flex flex-col gap-4 mt-5">
-          {featureImageList?.length > 0 ? (
-            featureImageList.map((img) => (
-              <div key={img._id} className="relative group">
-                <img src={img.image} className="w-full h-[300px] object-cover rounded-lg" />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"
-                  onClick={() => handleDeleteImage(img._id)}
-                >
-                  Delete
-                </Button>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500 text-center">No feature images uploaded yet.</p>
-          )}
-        </div>
-      </div>
-
       {/* Minimal POD gallery modal */}
       {podGalleryOpen && (
         <div
@@ -1077,7 +1213,7 @@ function AdminDashboard() {
                 onClick={() => setPodGalleryIndex((i) => Math.min(podGalleryUrls.length - 1, i + 1))}
                 className="px-3 py-2 rounded hover:bg-gray-100"
                 aria-label="Next"
-                disabled={podGalleryIndex === podGalleryUrls.length - 1}
+                disabled={podGalleryUrls.length - 1 === podGalleryIndex}
               >
                 ▶
               </button>
@@ -1099,6 +1235,36 @@ function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* ARCHIVES area (parent-controlled modal) */}
+      <div className="bg-white p-5 rounded-lg shadow-md border">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-xl font-semibold">Archives</h2>
+            <div className="text-sm text-gray-500">Restored items will reappear in their sections</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Button to open the modal */}
+            <Button size="sm" variant="outline" onClick={() => setArchivesOpen(true)}>
+              Open Archives
+            </Button>
+          </div>
+        </div>
+
+        {/* Pass isOpen and onClose to child */}
+        <Archives
+          isOpen={archivesOpen}
+          onClose={() => setArchivesOpen(false)}
+          archives={archives}
+          onRestorePos={restorePosSale}
+          onDeletePos={deleteArchivedPosSale}
+          onRestoreOrder={restoreOrder}
+          onDeleteOrder={deleteArchivedOrder}
+          onRestoreExpenseMonth={restoreExpenseMonth}
+          onDeleteExpenseMonth={deleteArchivedExpenseMonth}
+        />
+      </div>
     </div>
   );
 }

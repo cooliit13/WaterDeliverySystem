@@ -20,6 +20,13 @@ function DriverDashboard() {
 
   const activeControllerRef = useRef(null);
 
+  // NEW: uploading indicator (orderId being uploaded)
+  const [uploadingOrderId, setUploadingOrderId] = useState(null);
+
+  // NEW: POD success/error modal
+  const [podModalOpen, setPodModalOpen] = useState(false);
+  const [podModalMessage, setPodModalMessage] = useState("");
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -100,7 +107,6 @@ function DriverDashboard() {
       }
 
       const payload = await res.json();
-      // order array may be returned directly or in payload.orders
       const orders = Array.isArray(payload) ? payload : payload.orders ?? payload.data ?? [];
       setDeliveries(orders);
       setNotification(orders.length > 0 ? "New delivery assigned!" : "");
@@ -136,7 +142,6 @@ function DriverDashboard() {
     return null;
   };
 
-  // Try to populate coordsMap from existing data on load
   useEffect(() => {
     if (!deliveries || deliveries.length === 0) return;
 
@@ -154,7 +159,6 @@ function DriverDashboard() {
       return next;
     });
 
-    // attempt to geocode addresses that lack coordinates (stagger to be polite)
     deliveries.forEach((d, idx) => {
       const address = d.deliveryAddress || d.address || "";
       if (!address) return;
@@ -162,7 +166,6 @@ function DriverDashboard() {
         d.deliveryLocation && d.deliveryLocation.lat && d.deliveryLocation.lng;
       const hasCoords = dbCoords || coordsMap[address];
       if (!hasCoords) {
-        // stagger requests to avoid hammering the free service
         setTimeout(() => {
           (async () => {
             const cleaned = cleanAddressString(address);
@@ -177,7 +180,6 @@ function DriverDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveries]);
 
-  // helper cleans up the address text block (remove Phone:, Notes:, newlines)
   const cleanAddressString = (raw) => {
     if (!raw) return "";
     let s = String(raw);
@@ -187,11 +189,9 @@ function DriverDashboard() {
     return s;
   };
 
-  // openLocation: prefer precise coords, fallback to geocoding, fallback to cleaned address
   const openLocation = async (order) => {
     if (!order) return alert("No order data");
 
-    // 1) DB coords
     const dbCoords = order.deliveryLocation;
     if (dbCoords && dbCoords.lat && dbCoords.lng) {
       const lat = Number(dbCoords.lat);
@@ -202,7 +202,6 @@ function DriverDashboard() {
       }
     }
 
-    // 2) coordsMap (from earlier geocode attempts)
     const addr = order.deliveryAddress || order.address || "";
     const cached = coordsMap[addr];
     if (cached && cached.lat && cached.lng) {
@@ -210,23 +209,19 @@ function DriverDashboard() {
       return;
     }
 
-    // 3) cleaned address + geocode
     const cleaned = cleanAddressString(order.deliveryAddress || order.address || "");
     if (cleaned) {
       const coords = await geocodeText(cleaned);
       if (coords && coords.lat && coords.lng) {
-        // cache it for later
         setCoordsMap((prev) => ({ ...prev, [addr]: coords }));
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`);
         return;
       }
     }
 
-    // 4) final fallback: open maps with cleaned address text
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cleaned || addr)}`);
   };
 
-  // keep existing status update (for on the way / cancel)
   const handleStatusUpdate = async (orderId, newStatus) => {
     try {
       const token = localStorage.getItem("token");
@@ -235,35 +230,35 @@ function DriverDashboard() {
         return;
       }
 
-      // For non-completed statuses we reuse existing endpoint
-      if (newStatus !== "completed") {
-        const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status: newStatus }),
-        });
-
-        if (res.status === 401) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
-          navigate("/auth/login", { replace: true });
-          return;
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          console.error("Status update failed:", body);
-          return;
-        }
-        await fetchDriverOrders();
+      // Prevent completing without POD — force delivered flow with POD
+      if (newStatus === "completed") {
+        // friendly instruction
+        alert("Please use the 'Delivered (upload proof)' button to complete the delivery and upload Proof of Delivery (POD).");
         return;
       }
 
-      // If newStatus === 'completed' we expect the delivered flow to be handled by handleDeliverClick
-      console.warn("Use the delivered button flow that includes proof upload.");
+      const res = await fetch(`http://localhost:5000/api/driver/orders/${orderId}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        try { window.dispatchEvent(new Event("authChanged")); } catch (e) {}
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("Status update failed:", body);
+        return;
+      }
+      await fetchDriverOrders();
     } catch (error) {
       console.log("Status update error:", error);
     }
@@ -284,6 +279,8 @@ function DriverDashboard() {
       navigate("/auth/login");
       return;
     }
+
+    setUploadingOrderId(orderId); // mark uploading
 
     try {
       // 1) Upload proof to backend (backend should upload to Cloudinary)
@@ -309,6 +306,8 @@ function DriverDashboard() {
       if (!uploadRes.ok) {
         const body = await uploadRes.json().catch(() => ({}));
         console.error("Upload proof failed:", body);
+        setPodModalMessage("Failed to upload proof. Please try again.");
+        setPodModalOpen(true);
         return;
       }
 
@@ -333,17 +332,24 @@ function DriverDashboard() {
       if (!deliverRes.ok) {
         const body = await deliverRes.json().catch(() => ({}));
         console.error("Mark delivered failed:", body);
+        setPodModalMessage("Failed to mark order delivered. Please try again.");
+        setPodModalOpen(true);
         return;
       }
 
-      // refresh list
+      // success -> refresh list and show modal
       await fetchDriverOrders();
+      setPodModalMessage("Proof of Delivery uploaded successfully. Delivery completed.");
+      setPodModalOpen(true);
       console.log("Proof uploaded and order marked delivered");
     } catch (err) {
       console.error("uploadProofAndMarkDelivered error:", err);
+      setPodModalMessage("An unexpected error occurred while uploading proof. Please try again.");
+      setPodModalOpen(true);
     } finally {
       pendingDeliverRef.current = false;
       currentOrderRef.current = null;
+      setUploadingOrderId((id) => (id === orderId ? null : id));
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -487,6 +493,7 @@ function DriverDashboard() {
               <Button
                 variant="outline"
                 onClick={() => handleStatusUpdate(order._id, "delivering")}
+                disabled={uploadingOrderId === order._id}
               >
                 <CheckCircle className="h-4 w-4 mr-1" /> On the Way
               </Button>
@@ -495,6 +502,7 @@ function DriverDashboard() {
                 variant="ghost"
                 onClick={() => openLocation(order)}
                 className="flex items-center"
+                disabled={uploadingOrderId === order._id}
               >
                 <MapPin className="h-4 w-4 mr-1" /> See Location
               </Button>
@@ -503,13 +511,16 @@ function DriverDashboard() {
                 variant="default"
                 onClick={() => handleDeliverClick(order._id)}
                 className="flex items-center"
+                disabled={uploadingOrderId === order._id}
               >
-                <Camera className="h-4 w-4 mr-1" /> Delivered (upload proof)
+                <Camera className="h-4 w-4 mr-1" />
+                {uploadingOrderId === order._id ? "Uploading..." : "Delivered (upload proof)"}
               </Button>
 
               <Button
                 variant="destructive"
                 onClick={() => handleStatusUpdate(order._id, "cancelled")}
+                disabled={uploadingOrderId === order._id}
               >
                 <XCircle className="h-4 w-4 mr-1" /> Cancel
               </Button>
@@ -522,6 +533,19 @@ function DriverDashboard() {
           </CardContent>
         </Card>
       ))}
+
+      {/* POD modal (simple) */}
+      {podModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" onClick={() => setPodModalOpen(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-2">Proof of Delivery</h3>
+            <p className="mb-4">{podModalMessage}</p>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => { setPodModalOpen(false); fetchDriverOrders(); }}>OK</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

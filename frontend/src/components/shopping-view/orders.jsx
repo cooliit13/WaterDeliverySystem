@@ -15,18 +15,27 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   getAllOrdersByUserId,
   resetOrderDetails, // harmless if not used
+  // added cancelOrder and getOrderDetails usage
 } from "@/store/shop/order-slice";
+import { cancelOrder, getOrderDetails } from "@/store/shop/order-slice"; // added
 import { Badge } from "../ui/badge";
 import { useNavigate } from "react-router-dom";
 import RatingsDialog from "@/components/shopping-view/RatingsDialog"; // ensure this file exists
+import { useToast } from "@/components/ui/use-toast"; // added for toasts
 
 function ShoppingOrders() {
   const [productNameMap, setProductNameMap] = useState({}); // id -> name cache
   const [ratingsOrder, setRatingsOrder] = useState(null);
   const [ratingsOpen, setRatingsOpen] = useState(false);
 
+  const [confirmOpen, setConfirmOpen] = useState(false); // confirm modal state
+  const [confirmOrderId, setConfirmOrderId] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
   const { user } = useSelector((state) => state.auth);
   const { orderList } = useSelector((state) => state.shopOrder || {});
   const productsMaster = useSelector((state) => state.shopProducts?.productList || []);
@@ -118,6 +127,41 @@ function ShoppingOrders() {
     return "Unknown product";
   }
 
+  /* ------------- cancel logic ------------- */
+  // client-side rule: only allow cancel when status is pending / requested / empty
+  function isCancellable(status) {
+    const s = String(status || "").toLowerCase();
+    if (!s || s === "-" || s.includes("pending") || s.includes("request") || s.includes("requested")) return true;
+    const disallowed = ["deliver", "way", "shipped", "completed", "processing", "approved", "out for delivery", "on the way"];
+    return !disallowed.some((kw) => s.includes(kw));
+  }
+
+  function openConfirmCancel(orderId) {
+    setConfirmOrderId(orderId);
+    setConfirmOpen(true);
+  }
+
+  async function doCancel() {
+    if (!confirmOrderId) return;
+    setIsCancelling(true);
+    try {
+      const res = await dispatch(cancelOrder(confirmOrderId)).unwrap();
+      if (res && res.success) {
+        toast({ title: "Order cancelled" });
+        if (user?.id) dispatch(getAllOrdersByUserId(user.id));
+      } else {
+        toast({ title: res?.message || "Failed to cancel", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error("Cancel failed:", err);
+      toast({ title: "Failed to cancel order", variant: "destructive" });
+    } finally {
+      setIsCancelling(false);
+      setConfirmOpen(false);
+      setConfirmOrderId(null);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -188,6 +232,20 @@ function ShoppingOrders() {
                             Track
                           </Button>
                         )}
+
+                        {/* Cancel button: enabled only when cancellable */}
+                        <Button
+                          onClick={() => openConfirmCancel(order._id)}
+                          size="sm"
+                          className={
+                            isCancellable(order.status)
+                              ? "border border-red-500 text-red-600 bg-white hover:bg-red-50"
+                              : "opacity-60 cursor-not-allowed border border-gray-200 bg-white text-gray-400"
+                          }
+                          disabled={!isCancellable(order.status)}
+                        >
+                          Cancel Order
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -214,6 +272,23 @@ function ShoppingOrders() {
           if (user?.id) dispatch(getAllOrdersByUserId(user.id));
         }}
       />
+
+      {/* Confirm cancel modal */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg p-6 w-[90%] max-w-md shadow-lg">
+            <h3 className="text-lg font-semibold mb-2">Cancel Order</h3>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel this order? This action cannot be undone.</p>
+
+            <div className="flex justify-end gap-3">
+              <Button onClick={() => { setConfirmOpen(false); setConfirmOrderId(null); }} variant="ghost">No, keep it</Button>
+              <Button onClick={() => doCancel()} className="border border-red-500 text-red-600" disabled={isCancelling}>
+                {isCancelling ? "Cancelling..." : "Yes, cancel"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

@@ -1,4 +1,3 @@
-// backend/src/models/PosSale.js
 import mongoose from "mongoose";
 
 const PosItemSchema = new mongoose.Schema({
