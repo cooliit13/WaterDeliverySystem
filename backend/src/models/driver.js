@@ -11,11 +11,11 @@ const driverSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    contactNumber: {              // ✅ renamed from 'phone'
+    contactNumber: {       
       type: String,
       required: true,
     },
-    vehicleNumber: {              // ✅ added to match your form
+    vehicleNumber: {          
       type: String,
       required: true,
     },

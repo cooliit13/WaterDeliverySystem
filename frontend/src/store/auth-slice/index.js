@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
+import api from "../../utils/axiosInstance"; // <- relative import to axiosinstance
 
 /* -----------------------------------------------------------
    ✅ Safe localStorage parsing (prevents "null"/invalid JSON)
@@ -31,17 +31,13 @@ const initialState = {
 
 // Register
 export const registerUser = createAsyncThunk("/auth/register", async (formData) => {
-  const response = await axios.post("http://localhost:5000/api/auth/register", formData, {
-    withCredentials: true,
-  });
+  const response = await api.post("/auth/register", formData);
   return response.data;
 });
 
 // Login
 export const loginUser = createAsyncThunk("/auth/login", async (formData) => {
-  const response = await axios.post("http://localhost:5000/api/auth/login", formData, {
-    withCredentials: true,
-  });
+  const response = await api.post("/auth/login", formData);
   return response.data;
 });
 
@@ -56,7 +52,7 @@ export const logoutUser = createAsyncThunk("/auth/logout", async (_, { dispatch 
     dispatch(clearUser());
 
     // (Optional) Notify backend
-    await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
+    await api.post("/auth/logout", {});
   } catch (err) {
     console.warn("Logout request failed:", err.message);
   }
@@ -68,10 +64,9 @@ export const logoutUser = createAsyncThunk("/auth/logout", async (_, { dispatch 
 export const checkAuth = createAsyncThunk("/auth/checkauth", async () => {
   const token = localStorage.getItem("token");
 
-  const response = await axios.get("http://localhost:5000/api/auth/check-auth", {
-    withCredentials: true,
+  const response = await api.get("/auth/check-auth", {
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: token ? `Bearer ${token}` : undefined,
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
     },
   });
@@ -163,7 +158,6 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
-        
       })
 
       /* -------------------- LOGOUT -------------------- */

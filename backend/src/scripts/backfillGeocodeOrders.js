@@ -1,11 +1,10 @@
-// backend/src/scripts/backfillGeocodeOrders.js
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import Order from "../models/order.js"; // correct relative path from scripts/
+import Order from "../models/order.js";
 
 dotenv.config();
 
-// If running on Node < 18, dynamically import node-fetch and set global.fetch
+
 async function ensureFetch() {
   if (typeof fetch === "undefined") {
     try {

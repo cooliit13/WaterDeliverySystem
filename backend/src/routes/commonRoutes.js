@@ -1,7 +1,6 @@
 import express from "express";
 const router = express.Router();
 
-// Temporary feature list (you can connect this to DB later)
 router.get("/feature/get", async (req, res) => {
   try {
     const features = [

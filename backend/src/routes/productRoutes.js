@@ -4,6 +4,7 @@ import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
 import Product from "../models/Product.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import * as ProductController from "../controllers/ProductController.js"; // <-- import controller
 
 dotenv.config();
 const router = express.Router();
@@ -19,7 +20,7 @@ cloudinary.config({
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Helper to upload buffer to Cloudinary
+// Helper to upload buffer to Cloudinary (kept for compatibility if needed)
 const uploadBufferToCloudinary = (buffer) =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream({ folder: "products" }, (err, result) => {
@@ -29,43 +30,8 @@ const uploadBufferToCloudinary = (buffer) =>
     stream.end(buffer);
   });
 
-// Add new product (Admin only)
-router.post("/add", authMiddleware, upload.single("image"), async (req, res) => {
-  try {
-    let imageUrl = req.body.image;
 
-    if (req.file) {
-      const uploadRes = await uploadBufferToCloudinary(req.file.buffer);
-      imageUrl = uploadRes.secure_url;
-    }
-
-    if (!req.body.title || !req.body.description || !req.body.price) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-      });
-    }
-
-    const newProduct = new Product({
-      title: req.body.title,
-      description: req.body.description,
-      price: req.body.price,
-      averageReview: req.body.averageReview || 0,
-      image: imageUrl,
-    });
-
-    await newProduct.save();
-
-    res.status(201).json({ success: true, product: newProduct });
-  } catch (err) {
-    console.error("Error adding product:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: err.message,
-    });
-  }
-});
+router.post("/add", authMiddleware, upload.single("image"), ProductController.createProduct);
 
 // Get all products (for Admin)
 router.get("/get-all", async (req, res) => {
@@ -78,7 +44,7 @@ router.get("/get-all", async (req, res) => {
   }
 });
 
-// Public route for customer/shop frontend
+
 router.get("/get", async (req, res) => {
   try {
     const { sortBy } = req.query;
@@ -103,5 +69,45 @@ router.get("/get", async (req, res) => {
     });
   }
 });
+
+
+router.get("/get/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+    return res.json({ success: true, product });
+  } catch (err) {
+    console.error("Error fetching product by id (get/:id):", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+    return res.json({ success: true, product });
+  } catch (err) {
+    console.error("Error fetching product by id (:id):", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ------------------ EDIT / DELETE ------------------
+
+// Edit product (Admin) — matches frontend PUT /api/admin/products/edit/:id
+router.put("/edit/:id", authMiddleware, upload.single("image"), ProductController.editProduct);
+console.log("productRoutes: registered PUT /api/admin/products/edit/:id");
+
+router.delete("/delete/:id", authMiddleware, ProductController.deleteProduct);
+
+// --------------------------------------------------------------
 
 export default router;

@@ -1,5 +1,19 @@
-// models/order.js
 import mongoose from "mongoose";
+
+const OrderItemSchema = new mongoose.Schema({
+  productId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Product",
+    required: false,
+  },
+  productName: { type: String, required: true },
+  quantity: { type: Number, required: true },        
+  deliveredQty: { type: Number, default: 0 },         
+  price: { type: Number, required: true },
+
+  customerRating: { type: Number, min: 0, max: 5 },
+  customerFeedback: { type: String },
+});
 
 const orderSchema = new mongoose.Schema(
   {
@@ -9,34 +23,21 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ✅ Driver reference fixed
+    // Driver reference
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // changed from "Driver"
+      ref: "User",
     },
 
-    // ✅ When admin assigns a driver
     assignedAt: {
       type: Date,
     },
 
-    // ✅ Proof of delivery file path
     proofOfDelivery: {
       type: String,
     },
 
-    items: [
-      {
-        productId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: false,
-        },
-        productName: { type: String, required: true },
-        quantity: { type: Number, required: true },
-        price: { type: Number, required: true },
-      },
-    ],
+    items: [OrderItemSchema],
 
     totalAmount: {
       type: Number,
@@ -64,11 +65,20 @@ const orderSchema = new mongoose.Schema(
       type: Date,
     },
 
-    // ✅ NEW: store geocoded coordinates for faster mapping
     deliveryLocation: {
       lat: { type: Number },
       lng: { type: Number },
     },
+
+    
+    productRating: { type: Number, min: 0, max: 5 }, 
+    productFeedback: { type: String },
+
+    driverRating: { type: Number, min: 0, max: 5 }, 
+    driverFeedback: { type: String },
+
+    // prevent double submission
+    feedbackSubmitted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

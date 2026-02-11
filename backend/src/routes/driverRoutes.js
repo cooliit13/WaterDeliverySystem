@@ -1,8 +1,8 @@
 import express from "express";
 import multer from "multer";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import User from "../models/User.js"; // ✅ added
 
+// driver handlers
 import {
   registerDriver,
   loginDriver,
@@ -10,38 +10,32 @@ import {
   updateDriverProfile,
   getAssignedOrders,
   updateDeliveryStatus,
-  uploadProofOfDelivery
+  uploadProofOfDelivery,
+  getAllDriversAdmin,
 } from "../controllers/driverController.js";
+
+import { markOrderDelivered } from "../controllers/orderController.js";
 
 const router = express.Router();
 
-/* ✅ Multer setup */
-const storage = multer.diskStorage({
-  destination: "uploads/proofs",
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
-});
 
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// ✅ PUBLIC ROUTES
+/* PUBLIC */
 router.post("/register", registerDriver);
 router.post("/login", loginDriver);
 
-// ✅ PROTECTED ROUTES
+/* PROTECTED */
 router.get("/profile", authMiddleware, getDriverProfile);
 router.put("/profile", authMiddleware, updateDriverProfile);
 
 router.get("/orders", authMiddleware, getAssignedOrders);
 
-router.put(
-  "/orders/:orderId/status",
-  authMiddleware,
-  updateDeliveryStatus
-);
+/* DRIVER updates status */
+router.put("/orders/:orderId/status", authMiddleware, updateDeliveryStatus);
 
-// ✅ UPLOAD PROOF OF DELIVERY
+/* DRIVER uploads proof → Cloudinary */
 router.post(
   "/orders/:orderId/proof",
   authMiddleware,
@@ -49,29 +43,10 @@ router.post(
   uploadProofOfDelivery
 );
 
-/* ---------------------------------------------
-  ✅ ADMIN: Get all drivers (used by admin dashboard)
-  - minimal, protected route
-----------------------------------------------*/
-router.get("/admin/drivers", authMiddleware, async (req, res) => {
-  try {
-    // authMiddleware should set req.user; require admin role
-    const requesterRole = req.user?.role;
-    if (!requesterRole || requesterRole.toLowerCase() !== "admin") {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
+/* DRIVER marks as delivered (uploads handled separately by /proof flow) */
+router.put("/orders/:orderId/deliver", authMiddleware, markOrderDelivered);
 
-    // Fetch users with role 'driver'
-    const drivers = await User.find({ role: "driver" }).select(
-      "_id name fullName email"
-    );
-
-    // Return array (frontend expects an array)
-    return res.status(200).json(drivers);
-  } catch (err) {
-    console.error("Failed to fetch drivers:", err);
-    return res.status(500).json({ success: false, message: "Server error fetching drivers" });
-  }
-});
+/* ADMIN: list drivers (no RBAC check; authMiddleware still applied) */
+router.get("/admin/drivers", authMiddleware, getAllDriversAdmin);
 
 export default router;

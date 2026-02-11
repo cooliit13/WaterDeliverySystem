@@ -3,3 +3,18 @@ node_modules/
 
 # Ignore environment variables
 .env
+
+# Ignore build outputs (optional but recommended)
+dist/
+build/
+
+# Ignore VSCode settings (optional)
+.vscode/
+
+# Ignore Google API credentials (VERY IMPORTANT)
+src/google/credentials.json
+src/google/service-account.json
+src/google/token.json
+
+# Ignore all JSON files inside google folder
+src/google/*.json

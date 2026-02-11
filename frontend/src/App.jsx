@@ -1,3 +1,4 @@
+// App.jsx
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Route, Routes, Navigate } from "react-router-dom";
@@ -9,6 +10,8 @@ import AdminLayout from "./components/admin-view/layout";
 import ShoppingLayout from "./components/shopping-view/layout";
 import DriverLayout from "./components/driver-view/layout";
 import AddDriver from "./components/admin-view/add-driver"; // ✅ already imported
+import ShoppingOrderTrack from "@/components/shopping-view/order-track";
+import ShoppingOrders from "@/components/shopping-view/orders"; // <-- ADDED import
 
 // 📄 Auth Pages
 import AuthLogin from "./pages/auth/login";
@@ -24,6 +27,9 @@ import AdminOrders from "./pages/admin-view/orders";
 import AdminFeatures from "./pages/admin-view/features";
 import InventoryPage from "./pages/admin-view/InventoryPage";
 
+// ✅ POS page (ONLY NEW IMPORT)
+import AdminPOS from "@/pages/admin-view/POS";
+
 // 🚚 Driver Page
 import DriverDashboard from "./pages/driver-view/dashboard";
 
@@ -34,12 +40,23 @@ import ShoppingCheckout from "./pages/shopping-view/checkout";
 import ShoppingAccount from "./pages/shopping-view/account";
 import SearchProducts from "./pages/shopping-view/search";
 
+// NEW: Admin Ratings page
+import AdminRatings from "@/components/admin-view/AdminRatings";
+
+// ---- NEW IMPORTS (minimal) ----
+import UsersAdmin from "./pages/admin-view/UsersAdmin";
+import DriversAdmin from "./pages/admin-view/DriversAdmin";
+// -------------------------------
+
 // 🚫 Other Pages
 import NotFound from "./pages/not-found";
 import UnauthPage from "./pages/unauth-page";
 
 // ✅ ProtectedRoute
 import ProtectedRoute from "./components/admin-view/ProtectedRoute";
+
+// 🏠 Landing Page
+import LandingPage from "./pages/landing-page/LandingPage";
 
 function App() {
   const dispatch = useDispatch();
@@ -69,7 +86,7 @@ function App() {
                 return <Navigate to="/shop/home" replace />;
               })()
             ) : (
-              <Navigate to="/auth/login" replace />
+              <LandingPage />
             )
           }
         />
@@ -95,7 +112,15 @@ function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="features" element={<AdminFeatures />} />
           <Route path="inventory" element={<InventoryPage />} />
-          <Route path="add-driver" element={<AddDriver />} /> {/* ✅ Added route */}
+          <Route path="add-driver" element={<AddDriver />} />
+          <Route path="pos" element={<AdminPOS />} />
+
+          {/* <-- NEW Admin Ratings Route */}
+          <Route path="ratings" element={<AdminRatings />} />
+
+          {/* <-- NEW: Users & Drivers admin routes (minimal additions) */}
+          <Route path="users" element={<UsersAdmin />} />
+          <Route path="drivers" element={<DriversAdmin />} />
         </Route>
 
         {/* 🚚 Driver Routes (Protected) */}
@@ -117,6 +142,9 @@ function App() {
           <Route path="checkout" element={<ShoppingCheckout />} />
           <Route path="account" element={<ShoppingAccount />} />
           <Route path="search" element={<SearchProducts />} />
+
+          <Route path="orders" element={<ShoppingOrders />} />
+          <Route path="orders/:id/track" element={<ShoppingOrderTrack />} />
         </Route>
 
         {/* 🚫 Other Pages */}

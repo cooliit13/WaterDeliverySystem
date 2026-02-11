@@ -1,4 +1,10 @@
-import { HousePlug, LogOut, Menu, ShoppingCart, UserCog } from "lucide-react";
+import {
+  HousePlug,
+  LogOut,
+  Menu,
+  ShoppingCart,
+  UserCog,
+} from "lucide-react";
 import {
   Link,
   useLocation,
@@ -25,21 +31,29 @@ import { fetchCartItems } from "@/store/shop/cart-slice";
 import { Label } from "../ui/label";
 import { toast } from "react-hot-toast";
 
+// socket.io-client
+import { io } from "socket.io-client";
+
+// ⭐ Import Your LOGO Here ⭐
+import Logo from "@/assets/pictures/LOGO/AcquaLogo.png";
 
 function MenuItems() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const isActive = (path) =>
+    location.pathname === path ||
+    location.pathname.startsWith(path + "/");
+
   function handleNavigate(getCurrentMenuItem) {
     sessionStorage.removeItem("filters");
+
     const currentFilter =
       getCurrentMenuItem.id !== "home" &&
       getCurrentMenuItem.id !== "products" &&
       getCurrentMenuItem.id !== "search"
-        ? {
-            category: [getCurrentMenuItem.id],
-          }
+        ? { category: [getCurrentMenuItem.id] }
         : null;
 
     sessionStorage.setItem("filters", JSON.stringify(currentFilter));
@@ -53,25 +67,64 @@ function MenuItems() {
 
   return (
     <nav className="flex flex-col mb-3 lg:mb-0 lg:items-center gap-6 lg:flex-row">
-      {shoppingViewHeaderMenuItems.map((menuItem) => (
-        <Label
-          onClick={() => handleNavigate(menuItem)}
-          className="text-sm font-medium cursor-pointer"
-          key={menuItem.id}
-        >
-          {menuItem.label}
-        </Label>
-      ))}
+      {shoppingViewHeaderMenuItems.map((menuItem) => {
+        const active = isActive(menuItem.path);
+
+        return (
+          <Label
+            onClick={() => handleNavigate(menuItem)}
+            key={menuItem.id}
+            className={`
+              text-sm font-medium cursor-pointer transition-all
+              relative px-1 py-1
+              ${active ? "text-blue-600 font-semibold" : "text-muted-foreground"}
+            `}
+          >
+            {/* Text */}
+            <span
+              className={`
+                ${active ? "text-blue-600" : "hover:text-foreground"}
+                transition-colors
+              `}
+            >
+              {menuItem.label}
+            </span>
+
+            {/* Hover Underline */}
+            <span
+              className={`
+                absolute left-0 bottom-0 h-[2px] w-0 bg-blue-500 transition-all
+                group-hover:w-full
+                ${active ? "w-full" : ""}
+              `}
+            ></span>
+          </Label>
+        );
+      })}
     </nav>
   );
 }
 
+
 function HeaderRightContent() {
   const { user } = useSelector((state) => state.auth);
   const { cartItems } = useSelector((state) => state.shopCart);
+  const { orderList } = useSelector((state) => state.shopOrder || {});
   const [openCartSheet, setOpenCartSheet] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  // Count "On the Way" orders
+  const onTheWayCount = Array.isArray(orderList)
+    ? orderList.filter(
+        (o) =>
+          String(o?.orderStatus || "")
+            .toLowerCase()
+            .replace(/\s+/g, "") === "ontheway" ||
+          String(o?.orderStatus || "").toLowerCase() === "on the way" ||
+          String(o?.orderStatus || "").toLowerCase() === "on-the-way"
+      ).length
+    : 0;
 
   const handleLogout = () => {
     toast(
@@ -116,15 +169,92 @@ function HeaderRightContent() {
     );
   };
 
+  // Fetch cart items
   useEffect(() => {
     if (user?.id) {
       dispatch(fetchCartItems(user.id));
     }
   }, [dispatch, user?.id]);
 
+  // Realtime socket listener
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const SOCKET_URL =
+      import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+
+    const socket = io(SOCKET_URL, {
+      reconnectionAttempts: 5,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      try {
+        socket.emit("identify", user.id);
+      } catch (err) {}
+    });
+
+    const onOrderStatusUpdate = (payload) => {
+      const { orderId, status } = payload || {};
+
+      toast(
+        (t) => (
+          <div className="p-2">
+            <div className="font-semibold">Order Update</div>
+            <div className="text-sm">
+              Order #{orderId} is now <strong>{status}</strong>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  navigate(`/shop/orders/${orderId}`);
+                }}
+              >
+                View order
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => toast.dismiss(t.id)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        ),
+        { duration: 8000, position: "top-right" }
+      );
+    };
+
+    socket.on("order:status:update", onOrderStatusUpdate);
+
+    return () => {
+      socket.off("order:status:update", onOrderStatusUpdate);
+      try {
+        socket.disconnect();
+      } catch {}
+    };
+  }, [user?.id, navigate]);
+
   return (
     <div className="flex lg:items-center lg:flex-row flex-col gap-4">
-      {/* 🛒 Cart Button */}
+      {/* Track Orders */}
+      <Button
+        onClick={() => navigate("/shop/orders")}
+        variant="outline"
+        className="hidden sm:inline-flex items-center gap-2"
+      >
+        <span className="text-sm">Track Orders</span>
+        {onTheWayCount > 0 && (
+          <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-xs px-2 py-0.5">
+            {onTheWayCount}
+          </span>
+        )}
+      </Button>
+
+      {/* Cart Button */}
       <Sheet open={openCartSheet} onOpenChange={setOpenCartSheet}>
         <Button
           onClick={() => setOpenCartSheet(true)}
@@ -136,15 +266,14 @@ function HeaderRightContent() {
           <span className="absolute top-[-5px] right-[2px] font-bold text-sm">
             {cartItems?.items?.length || 0}
           </span>
-          <span className="sr-only">User cart</span>
         </Button>
         <UserCartWrapper
           setOpenCartSheet={setOpenCartSheet}
-          cartItems={cartItems?.items?.length > 0 ? cartItems.items : []}
+          cartItems={cartItems?.items || []}
         />
       </Sheet>
 
-      {/* 👤 Profile Dropdown */}
+      {/* Profile Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Avatar className="bg-black cursor-pointer">
@@ -153,9 +282,7 @@ function HeaderRightContent() {
                 src={user.profileImage}
                 alt="Profile"
                 className="w-10 h-10 rounded-full object-cover"
-                onError={(e) => {
-                  e.target.style.display = "none";
-                }}
+                onError={(e) => (e.target.style.display = "none")}
               />
             ) : (
               <AvatarFallback className="bg-black text-white font-extrabold">
@@ -188,30 +315,34 @@ function HeaderRightContent() {
   );
 }
 
-
-
+/* ⭐⭐⭐ SHOPPING HEADER (Logo Added Here!) ⭐⭐⭐ */
 function ShoppingHeader() {
-  const { isAuthenticated } = useSelector((state) => state.auth);
-
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background">
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
-        <Link to="/shop/home" className="flex items-center gap-2">
-          <HousePlug className="h-6 w-6" />
-          <span className="font-bold">Water Refilling Station</span>
+
+        {/* LOGO ONLY — centered and clickable */}
+        <Link to="/shop/home" className="flex items-center">
+          <img
+            src={Logo}
+            alt="Logo"
+            className="h-12 w-auto object-contain"
+          />
         </Link>
+
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="lg:hidden">
               <Menu className="h-6 w-6" />
-              <span className="sr-only">Toggle header menu</span>
             </Button>
           </SheetTrigger>
+
           <SheetContent side="left" className="w-full max-w-xs">
             <MenuItems />
             <HeaderRightContent />
           </SheetContent>
         </Sheet>
+
         <div className="hidden lg:block">
           <MenuItems />
         </div>

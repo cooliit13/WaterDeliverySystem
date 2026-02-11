@@ -5,11 +5,14 @@ import {
   deleteUser,
   getAllCustomers,
   getAllDrivers,
-  approveOrder
+  updateUserRole,
 } from "../controllers/adminController.js";
-import { createDriverAccount } from "../controllers/driverController.js"; // ✅ added
+import { createDriverAccount } from "../controllers/driverController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import Order from "../models/order.js";
+
+// new import -> approveAndAssignDriver
+import { approveAndAssignDriver } from "../controllers/orderController.js";
 
 const router = express.Router();
 
@@ -26,10 +29,17 @@ router.get("/users", authMiddleware, adminOnly, getAllUsers);
 router.put("/users/:id/status", authMiddleware, adminOnly, updateUserStatus);
 router.delete("/users/:id", authMiddleware, adminOnly, deleteUser);
 
+
+router.put("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
+router.patch("/users/:id/role", authMiddleware, adminOnly, updateUserRole);
+// ------------------------------------------------------------------
+
 router.get("/customers", authMiddleware, adminOnly, getAllCustomers);
 router.get("/drivers", authMiddleware, adminOnly, getAllDrivers);
-router.post("/drivers", authMiddleware, adminOnly, createDriverAccount); // ✅ added
-router.put("/orders/approve", authMiddleware, approveOrder);
+router.post("/drivers", authMiddleware, adminOnly, createDriverAccount);
+
+// <-- use new approveAndAssignDriver here (keeps same route used by frontend)
+router.put("/orders/approve", authMiddleware, adminOnly, approveAndAssignDriver);
 
 router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
   try {
@@ -44,7 +54,7 @@ router.get("/orders/get", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// ✅ Get order details
+//  Get order details
 router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -61,7 +71,7 @@ router.get("/orders/details/:id", authMiddleware, adminOnly, async (req, res) =>
   }
 });
 
-// ✅ Update order status
+//  Update order status
 router.put("/orders/update/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { orderStatus } = req.body;

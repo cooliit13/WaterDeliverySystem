@@ -1,7 +1,7 @@
 import Customer from "../models/customer.js";
 import generateToken from "../utils/generateToken.js";
 
-// ✅ Register
+// Register
 export const registerCustomer = async (req, res) => {
   try {
     const { name, email, password, address, contact } = req.body;
@@ -34,7 +34,7 @@ export const registerCustomer = async (req, res) => {
   }
 };
 
-// ✅ Login
+//  Login
 export const authCustomer = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -55,7 +55,7 @@ export const authCustomer = async (req, res) => {
   }
 };
 
-// ✅ Get own profile
+// Get own profile
 export const getCustomerProfile = async (req, res) => {
   try {
     const customer = await Customer.findById(req.customer._id).select("-password");
@@ -66,7 +66,7 @@ export const getCustomerProfile = async (req, res) => {
   }
 };
 
-// ✅ Update own profile
+// Update own profile
 export const updateCustomerProfile = async (req, res) => {
   try {
     const customer = await Customer.findById(req.customer._id);
@@ -94,7 +94,7 @@ export const updateCustomerProfile = async (req, res) => {
   }
 };
 
-// ✅ Delete account (customer)
+//  Delete account (customer)
 export const deleteCustomer = async (req, res) => {
   try {
     const customer = await Customer.findById(req.customer._id);
@@ -107,7 +107,7 @@ export const deleteCustomer = async (req, res) => {
   }
 };
 
-// ✅ List all customers (admin)
+//  List all customers (admin)
 export const getAllCustomers = async (req, res) => {
   try {
     const customers = await Customer.find().select("-password");
@@ -117,7 +117,7 @@ export const getAllCustomers = async (req, res) => {
   }
 };
 
-// ✅ Token validation (for frontend)
+//  Token validation (for frontend)
 export const validateToken = async (req, res) => {
   try {
     if (req.customer) {
